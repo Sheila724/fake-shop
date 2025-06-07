@@ -72,7 +72,7 @@ jobs:
 
         with:
           args: >
-            -Dsonar.projectKey=Sheila Alves/fake-shop # CORRIGIDO: Chave do projeto
+            -Dsonar.projectKey=Sheila Alves_fake-shop # CORRIGIDO: Chave do projeto
             -Dsonar.organization=Sheila Alves # CORRIGIDO: Organização
             -Dsonar.sources=src/ # Onde seu código-fonte Python está (ex: src/)
             # -Dsonar.tests=src/tests/ # Onde seus testes estão (opcional)
