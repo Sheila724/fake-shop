@@ -49,7 +49,7 @@ jobs:
             docker network create rede-da-sheila || true
 
             # Execução do contêiner do banco de dados
-            docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8214:5432 postgres:15
+            docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8215:5432 postgres:15
 
             # Execução do contêiner da aplicação, usando o nome de usuário correto para a imagem
-            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /CAMINHO/PARA/.env -p 8213:8213 sheila421/fake-shop-app:latest
+            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest
