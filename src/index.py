@@ -71,7 +71,7 @@ def checkout():
     user_email = request.form['email']
     mobile = request.form['mobile']
     address1 = request.form['address1']
-    complemento = request.form.get('complemento', '')  # Opcional
+    address2 = request.form.get('address2', '')  # Opcional
     city = request.form['city']
     state = request.form['state']
     country = request.form.get('country', 'Brasil')  # Padrão para Brasil
@@ -94,7 +94,7 @@ def checkout():
     order.user_email = user_email
     order.mobile = mobile
     order.address1 = address1
-    order.complemento = complemento
+    order.address2 = address2
     order.city = city
     order.state = state
     order.country = country
@@ -273,7 +273,7 @@ def editar_pedido(pedido_id):
         pedido.user_name = request.form.get('user_name', pedido.user_name)
         pedido.user_email = request.form.get('user_email', pedido.user_email)
         pedido.address1 = request.form.get('address1', pedido.address1)
-        pedido.complemento = request.form.get('complemento', pedido.complemento)
+        pedido.address2 = request.form.get('address2', pedido.address2)
         pedido.city = request.form.get('city', pedido.city)
         pedido.state = request.form.get('state', pedido.state)
         pedido.country = request.form.get('country', pedido.country)
