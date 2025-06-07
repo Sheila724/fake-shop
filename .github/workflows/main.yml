@@ -48,9 +48,7 @@ jobs:
             docker rm fake-shop-db || true
 
             docker network rm rede-da-sheila || true
-            docker network create rede-da-sheila || true
-
-            docker run -d --name fake-shop-db --network rede-da-sheila \
+            docker network create rede-da-sheila || true            docker run -d --name fake-shop-db --network rede-da-sheila \
               -e POSTGRES_USER=ecommerce \
               -e POSTGRES_PASSWORD=Pg1234 \
               -e POSTGRES_DB=ecommerce \
