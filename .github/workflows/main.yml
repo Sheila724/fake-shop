@@ -22,8 +22,8 @@ jobs:
           push: true
           file: ./src/Dockerfile
           tags: |
-            sheila421/fake-shop-app:latest # CORRIGIDO: Usando o seu username 'sheila421'
-            sheila421/fake-shop-app:v${{ github.run_number }} # CORRIGIDO: Usando o seu username 'sheila421'
+            sheila421/fake-shop-app:latest
+            sheila421/fake-shop-app:v${{ github.run_number }}
 
   deploy:
     needs: CI
