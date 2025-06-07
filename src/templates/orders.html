@@ -37,10 +37,12 @@
                             R$ {{ pedido.total_price if pedido.total_price else (pedido.items | sum(attribute='price')) }}
                         </td>
                         <td>
-                            <a href="/editar_pedido/{{ pedido.id }}" class="btn btn-sm btn-primary mb-1">Editar</a>
-                            <form action="/excluir_pedido/{{ pedido.id }}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir este pedido?');">Excluir</button>
-                            </form>
+                            <div style="display: flex; gap: 8px;">
+                                <a href="/editar_pedido/{{ pedido.id }}" class="btn btn-sm btn-warning font-weight-bold">Editar</a>
+                                <form action="/excluir_pedido/{{ pedido.id }}" method="POST" style="margin: 0;">
+                                    <button type="submit" class="btn btn-sm btn-danger font-weight-bold" onclick="return confirm('Tem certeza que deseja excluir este pedido?');">Excluir</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
