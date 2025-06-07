@@ -18,7 +18,7 @@ services:
     networks:
       - rede-da-sheila
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - fake-shop-db-data:/var/lib/postgresql/data
 
   app:
     build:
@@ -37,4 +37,4 @@ services:
       - ./src:/app
 
 volumes:
-  db_data:
+  fake-shop-db-data:
