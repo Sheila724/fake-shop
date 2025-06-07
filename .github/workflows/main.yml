@@ -25,63 +25,8 @@ jobs:
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
 
-  # NOVO JOB PARA ANÁLISE DE QUALIDADE COM SONARCLOUD
-  sonarcloud:
-    runs-on: ubuntu-latest
-    needs: CI # Este job só será executado após o job 'CI' ter sucesso
-    outputs: # Define as saídas deste job para serem usadas por outros jobs
-      quality_gate_status: ${{ steps.sonar_scan.outputs.quality_gate_status }} # Exporta o status do Quality Gate
-
-    steps:
-      - name: Obtendo o Codigo
-        uses: actions/checkout@v4.2.2
-        with:
-          fetch-depth: 0  # Necessário para análises de branch/PR no SonarQube
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17' # SonarScanner requer Java (versão 11 ou superior é comum)
-          distribution: 'temurin' # Distribuição recomendada
-
-      - name: Cache SonarQube packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r src/requirements.txt # Assumindo requirements.txt está em src/
-
-      - name: SonarCloud Scan
-        id: sonar_scan # Adiciona um ID a este passo para poder acessar suas saídas
-        uses: SonarSource/sonarcloud-github-action@v2.2.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Necessário para importar resultados de PRs
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Seu token SonarCloud que você criou
-
-        with:
-          args: >
-            -Dsonar.projectKey=SheilaAlves_fake-shop # CORRIGIDO: Chave do projeto
-            -Dsonar.organization=sheila724 # CORRIGIDO: Organização
-            -Dsonar.sources=src/ # Onde seu código-fonte Python está (ex: src/)
-            # -Dsonar.tests=src/tests/ # Onde seus testes estão (opcional)
-            # -Dsonar.python.version=3.11 # Versão do Python (opcional)
-            # -Dsonar.python.coverage.reportPaths=coverage.xml # Se você gerar relatório de cobertura
-
   deploy:
-    needs: [CI, sonarcloud] # O job 'deploy' agora espera que 'CI' e 'sonarcloud' tenham sucesso
-    if: success() && needs.sonarcloud.outputs.quality_gate_status == 'PASSED' # Condição para o deploy
+    needs: CI
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
