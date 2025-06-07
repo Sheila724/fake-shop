@@ -8,22 +8,7 @@ jobs:
   CI:
     runs-on: ubuntu-latest
     steps:
-      - name: Obtendo o Codigo
-        uses: actions/checkout@v4.2.2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Construcao e Envio da Imagem Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: ./src
-          push: true
-          file: ./src/Dockerfile
-          tags: |
-            sheila421/fake-shop-app:latest
-            sheila421/fake-shop-app:v${{ github.run_number }}
+      # ... (parte CI - sem alterações) ...
 
   deploy:
     needs: CI
@@ -40,7 +25,6 @@ jobs:
             docker pull sheila421/fake-shop-app:latest
 
             # Comandos para parar e remover contêineres existentes (se houver)
-            # Isso garante um ambiente limpo para o deploy.
             docker stop fake-shop-app || true
             docker rm fake-shop-app || true
             docker stop fake-shop-db || true
@@ -50,27 +34,38 @@ jobs:
             docker network create rede-da-sheila || true
 
             # Execução do contêiner do banco de dados (seu próprio DB)
-            # Com credenciais 'ecommerce' e 'Pg1234'
             docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8214:5432 postgres:15
 
-            # ADICIONADO: Sleep de 30 segundos para garantir que o banco de dados esteja totalmente pronto
-            # Isso é crucial para que a aplicação e as migrações possam se conectar sem erro.
-            sleep 30
+            # ADICIONADO: Script de espera robusto para o banco de dados
+            echo "DEBUG: Aguardando o banco de dados 'fake-shop-db' ficar disponível na porta 5432..."
+            until docker exec fake-shop-db pg_isready -h localhost -p 5432 -U ecommerce; do
+              echo "DEBUG: Banco de dados não está pronto ainda. Tentando novamente em 5 segundos..."
+              sleep 5
+            done
+            echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
 
             # EXECUTAR MIGRAÇÕES DO BANCO DE DADOS
-            # Este contêiner é temporário (--rm) e se conecta ao DB para aplicar o esquema.
-            # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
+            # Adicionado FLASK_APP para que o Flask encontre a aplicação
             docker run --rm --network rede-da-sheila --env-file /home/fiona/.env -e FLASK_APP=index.py sheila421/fake-shop-app:latest flask db upgrade
             MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
               echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
               exit $MIGRATION_STATUS
             fi
-            
+
             # Execução do contêiner da aplicação principal
-            # O comando de inicialização da aplicação é executado diretamente.
-            # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
             docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
+
+            # ADICIONADO: Um pequeno atraso para dar tempo do contêiner iniciar e poder rodar comandos de debug
+            sleep 5
+
+            # CAPTURA AS VARIÁVEIS DE AMBIENTE DENTRO DO CONTÊINER E SALVA EM ARQUIVO
+            docker exec fake-shop-app env > /tmp/app_env_vars.txt
+            # CAPTURA OS LOGS DO CONTÊINER E SALVA EM ARQUIVO
+            docker logs fake-shop-app > /tmp/app_logs.txt
+
+            echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app_logs.txt e /tmp/app_env_vars.txt no servidor."
+            echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
 
             # ADICIONADO: Um pequeno atraso para dar tempo do contêiner iniciar e poder rodar comandos de debug
             sleep 5
