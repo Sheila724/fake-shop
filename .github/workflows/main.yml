@@ -53,4 +53,4 @@ jobs:
 
             # Execução do contêiner da aplicação, usando o nome de usuário correto para a imagem
             # ADICIONADO: Um atraso de 15 segundos para dar tempo ao banco de dados de inicializar
-            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest /bin/sh -c "sleep 60 && /app/entrypoint.sh"
+            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest /bin/sh -c "sleep 15 && /app/entrypoint.sh"
