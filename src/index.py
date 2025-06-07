@@ -6,6 +6,7 @@ from models.product import Product
 from models.base import db
 from flask_migrate import Migrate, upgrade
 import random
+from flask import abort
 
 app = Flask(__name__,
             static_url_path='',
@@ -247,8 +248,37 @@ def remove_item(item_id):
 
 @app.route('/pedidos')
 def pedidos():
-    pedidos = Order.query.filter_by(is_open=False).order_by(Order.id.desc()).all()
+    pedidos = Order.query.filter(Order.is_open == False).order_by(Order.id.desc()).all()
+    print(f"DEBUG: {len(pedidos)} pedidos finalizados encontrados.")
     return render_template('orders.html', pedidos=pedidos)
+
+@app.route('/excluir_pedido/<int:pedido_id>', methods=['POST'])
+def excluir_pedido(pedido_id):
+    pedido = Order.query.get_or_404(pedido_id)
+    # Exclui todos os itens do pedido antes de excluir o pedido
+    for item in pedido.items:
+        db.session.delete(item)
+    db.session.delete(pedido)
+    db.session.commit()
+    flash('Pedido excluído com sucesso!', 'success')
+    return redirect(url_for('pedidos'))
+
+@app.route('/editar_pedido/<int:pedido_id>', methods=['GET', 'POST'])
+def editar_pedido(pedido_id):
+    pedido = Order.query.get_or_404(pedido_id)
+    if request.method == 'POST':
+        pedido.user_name = request.form.get('user_name', pedido.user_name)
+        pedido.user_email = request.form.get('user_email', pedido.user_email)
+        pedido.address1 = request.form.get('address1', pedido.address1)
+        pedido.address2 = request.form.get('address2', pedido.address2)
+        pedido.city = request.form.get('city', pedido.city)
+        pedido.state = request.form.get('state', pedido.state)
+        pedido.country = request.form.get('country', pedido.country)
+        pedido.zip_code = request.form.get('zip_code', pedido.zip_code)
+        db.session.commit()
+        flash('Pedido editado com sucesso!', 'success')
+        return redirect(url_for('pedidos'))
+    return render_template('edit_order.html', pedido=pedido)
 
 @app.route('/')
 def index():

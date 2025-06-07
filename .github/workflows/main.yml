@@ -10,34 +10,20 @@ jobs:
     steps:
       - name: Obtendo o Codigo
         uses: actions/checkout@v4.2.2
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # NOVO PASSO: Docker meta para gerar tags e labels automaticamente
-      - name: Docker meta
-        id: meta # Atribui um ID para usar as saídas desta ação
-        uses: docker/metadata-action@v5
-        with:
-          images: sheila421/fake-shop-app # O nome base da sua imagem
-          tags: | # Define as tags que você quer gerar
-            type=raw,value=latest # Tag: latest
-            type=raw,value=v${{ github.run_number }} # Tag: v<run_number>
-            # Você pode adicionar outras tags aqui, por exemplo:
-            # type=ref,event=branch # Tag: <branch-name> (ex: main)
-            # type=sha,format=short # Tag: <short-sha>
-
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
           context: ./src
           push: true
           file: ./src/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }} # Usa as tags geradas pela ação 'meta'
-          labels: ${{ steps.meta.outputs.labels }} # Usa os labels gerados pela ação 'meta'
+          tags: |
+            sheila421/fake-shop-app:latest
+            sheila421/fake-shop-app:v${{ github.run_number }}
 
   deploy:
     needs: CI
@@ -51,10 +37,10 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             # Pull da imagem com o nome de usuário correto
-            # ATENÇÃO: Aqui também usamos a tag latest, mas você pode usar v${{ github.run_number }} se preferir a versão específica.
-            docker pull sheila421/fake-shop-app:latest 
+            docker pull sheila421/fake-shop-app:latest
 
             # Comandos para parar e remover contêineres existentes (se houver)
+            # O 'docker rm fake-shop-db' agora removerá APENAS o contêiner, não os dados do volume.
             docker stop fake-shop-app || true
             docker rm fake-shop-app || true
             docker stop fake-shop-db || true
@@ -66,7 +52,11 @@ jobs:
             docker network create rede-da-sheila || true
 
             # Execução do contêiner do banco de dados (seu próprio DB)
-            docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8214:5432 postgres:15
+            # ADICIONADO: Montagem de volume para persistência de dados
+            docker run -d --name fake-shop-db --network rede-da-sheila \
+              -v fake-shop-db-data:/var/lib/postgresql/data \ # <--- CHAVE PARA A PERSISTÊNCIA DE DADOS
+              -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce \
+              -p 8214:5432 postgres:15
 
             # Script de espera robusto para o banco de dados
             echo "DEBUG: Aguardando o banco de dados 'fake-shop-db' ficar disponível na porta 5432..."
@@ -89,7 +79,7 @@ jobs:
             docker run --rm --network rede-da-sheila \
               --env-file /home/fiona/.env \
               -e FLASK_APP=index.py \
-              -e DB_HOST=$DB_INTERNAL_IP \
+              -e DB_HOST=$DB_INTERNAL_IP \ # Sobrescreve DB_HOST com o IP para a migração
               sheila421/fake-shop-app:latest flask db upgrade
             MIGRATION_STATUS=$? # Captura o status de saída do comando de migração
             if [ $MIGRATION_STATUS -ne 0 ]; then
@@ -98,9 +88,10 @@ jobs:
             fi
 
             # Execução do contêiner da aplicação principal
+            # CORREÇÃO FINAL: Forçar a aplicação principal a usar o IP do banco de dados.
             docker run -d --name fake-shop-app --network rede-da-sheila \
               --env-file /home/fiona/.env \
-              -e DB_HOST=$DB_INTERNAL_IP \
+              -e DB_HOST=$DB_INTERNAL_IP \ # Sobrescreve DB_HOST com o IP para a APLICAÇÃO PRINCIPAL
               -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             # ADICIONADO: Um pequeno atraso para dar tempo do contêiner da aplicação iniciar e poder rodar comandos de debug

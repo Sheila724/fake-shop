@@ -1,0 +1,42 @@
+{% extends 'shared/base.html' %}
+{% block content %}
+<div class="container py-5">
+    <h2 class="mb-4">Editar Pedido</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Nome do Cliente</label>
+            <input type="text" class="form-control" name="user_name" value="{{ pedido.user_name }}" required>
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" class="form-control" name="user_email" value="{{ pedido.user_email }}" required>
+        </div>
+        <div class="form-group">
+            <label>Endereço 1</label>
+            <input type="text" class="form-control" name="address1" value="{{ pedido.address1 }}">
+        </div>
+        <div class="form-group">
+            <label>Endereço 2</label>
+            <input type="text" class="form-control" name="address2" value="{{ pedido.address2 }}">
+        </div>
+        <div class="form-group">
+            <label>Cidade</label>
+            <input type="text" class="form-control" name="city" value="{{ pedido.city }}">
+        </div>
+        <div class="form-group">
+            <label>Estado</label>
+            <input type="text" class="form-control" name="state" value="{{ pedido.state }}">
+        </div>
+        <div class="form-group">
+            <label>País</label>
+            <input type="text" class="form-control" name="country" value="{{ pedido.country }}">
+        </div>
+        <div class="form-group">
+            <label>CEP</label>
+            <input type="text" class="form-control" name="zip_code" value="{{ pedido.zip_code }}">
+        </div>
+        <button type="submit" class="btn btn-success">Salvar Alterações</button>
+        <a href="{{ url_for('pedidos') }}" class="btn btn-secondary ml-2">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

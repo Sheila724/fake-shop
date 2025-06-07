@@ -16,6 +16,7 @@
                         <th>Data</th>
                         <th>Itens</th>
                         <th>Total</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -32,7 +33,15 @@
                                 {% endfor %}
                             </ul>
                         </td>
-                        <td>R$ {{ pedido.total_price }}</td>
+                        <td>
+                            R$ {{ pedido.total_price if pedido.total_price else (pedido.items | sum(attribute='price')) }}
+                        </td>
+                        <td>
+                            <a href="/editar_pedido/{{ pedido.id }}" class="btn btn-sm btn-primary mb-1">Editar</a>
+                            <form action="/excluir_pedido/{{ pedido.id }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir este pedido?');">Excluir</button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
