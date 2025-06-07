@@ -19,7 +19,7 @@ class Order(db.Model):
 
     # Campos de endereço
     address1 = db.Column(db.String(255), nullable=True)
-    address2 = db.Column(db.String(255), nullable=True)
+    complemento = db.Column(db.String(255), nullable=True)
     city = db.Column(db.String(100), nullable=True)
     state = db.Column(db.String(100), nullable=True)
     country = db.Column(db.String(100), nullable=True, default="Brasil")

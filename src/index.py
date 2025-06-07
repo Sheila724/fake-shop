@@ -71,7 +71,7 @@ def checkout():
     user_email = request.form['email']
     mobile = request.form['mobile']
     address1 = request.form['address1']
-    address2 = request.form.get('address2', '')  # Opcional
+    complemento = request.form.get('complemento', '')  # Opcional
     city = request.form['city']
     state = request.form['state']
     country = request.form.get('country', 'Brasil')  # Padrão para Brasil
@@ -94,7 +94,7 @@ def checkout():
     order.user_email = user_email
     order.mobile = mobile
     order.address1 = address1
-    order.address2 = address2
+    order.complemento = complemento
     order.city = city
     order.state = state
     order.country = country
@@ -105,6 +105,9 @@ def checkout():
     order.card_number = card_number
     order.expiry_date = expiry_date
     order.cvv = cvv
+
+    # CALCULA O TOTAL DA COMPRA
+    order.total_price = sum(item.quantity * item.price for item in order.items)
 
     # Gera um número único para o pedido e fecha o pedido
     order.order_number = generate_order_number()
@@ -270,7 +273,7 @@ def editar_pedido(pedido_id):
         pedido.user_name = request.form.get('user_name', pedido.user_name)
         pedido.user_email = request.form.get('user_email', pedido.user_email)
         pedido.address1 = request.form.get('address1', pedido.address1)
-        pedido.address2 = request.form.get('address2', pedido.address2)
+        pedido.complemento = request.form.get('complemento', pedido.complemento)
         pedido.city = request.form.get('city', pedido.city)
         pedido.state = request.form.get('state', pedido.state)
         pedido.country = request.form.get('country', pedido.country)
