@@ -21,16 +21,16 @@ jobs:
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
-          context: ./src # Garanta que este caminho seja o seu código-fonte
+          context: ./src
           push: true
-          file: ./src/Dockerfile # Garanta que este caminho seja o seu Dockerfile
+          file: ./src/Dockerfile
           tags: |
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
 
   # NOVO JOB: Análise do SonarQube
   sonar_analysis:
-    needs: CI # Este job só roda depois que o job CI termina
+    needs: CI
     runs-on: ubuntu-latest
     steps:
       - name: Obtendo o Codigo para Analise
@@ -40,56 +40,37 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq curl
 
       - name: Iniciar e Configurar SonarQube Local Temporario
-        id: sonarqube_setup # Id para referenciar as saídas deste passo
+        id: sonarqube_setup
         run: |
           SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
-          SONAR_LOCAL_HOST="http://localhost:9000"
-          SONAR_ADMIN_PASSWORD="admin" # Senha inicial, você DEVE mudar no primeiro uso
+          # Não defina SONAR_ADMIN_PASSWORD aqui se não for usar.
+          # SONAR_ADMIN_PASSWORD="admin" # Senha inicial, você DEVE mudar no primeiro uso
 
           echo "Iniciando o contêiner SonarQube..."
           docker run -d --name ${SONARQUBE_CONTAINER_NAME} -p 9000:9000 -p 9092:9092 sonarqube:lts-community
 
-          echo "Esperando o SonarQube iniciar..."
-          for i in $(seq 1 60); do # Tenta por até 5 minutos (60*5s)
-            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${SONAR_LOCAL_HOST}/api/system/status)
-            if [ "$STATUS_CODE" -eq 200 ]; then
-              echo "SonarQube está online!"
-              break
-            fi
-            echo "Tentativa $i: SonarQube ainda não está pronto. Status: $STATUS_CODE. Aguardando..."
-            sleep 5
-          done
+          echo "Aguardando um tempo fixo para o SonarQube iniciar (isso pode levar alguns minutos)..."
+          # Removido o loop de verificação de status. Agora apenas uma espera fixa.
+          sleep 120 # Espere 2 minutos. Pode ajustar se necessário.
 
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "Erro: SonarQube não iniciou a tempo. Abortando a pipeline."
-            exit 1
-          fi
+          # Este passo é onde o problema pode estar, se o SonarQube não iniciou.
+          # Os logs do próximo passo nos dirão o que aconteceu.
 
-          # --- Configurar o SonarQube pela primeira vez (se necessário) ---
-          # Esta parte é crucial para a primeira execução do pipeline.
-          # Você precisa gerar um token no SonarQube localmente.
-          # Depois de rodar a primeira vez, vá para http://localhost:9000
-          # Acesse com admin/admin, mude a senha, crie um token e armazene como secret no GitHub.
-          # Aconselha-se usar a primeira vez manualmente, ou usar a API para gerar token automaticamente (mais complexo).
-          # POR SIMPLICIDADE E PARA O TRABALHO DA FACULDADE, VAMOS USAR O USUÁRIO E SENHA PADRÃO PARA O QA GATE
-          # MAS EM PRODUÇÃO, VOCÊ USARIA UM TOKEN PRÉ-CONFIGURADO.
-          # Para gerar um token real via API (requer credenciais admin), descomente e use o seguinte:
-          # LOCAL_SONAR_TOKEN=$(curl -s -X POST -u admin:${SONAR_ADMIN_PASSWORD} "${SONAR_LOCAL_HOST}/api/user_tokens/generate?name=github_actions_token" | jq -r .token)
-          # echo "LOCAL_SONAR_TOKEN=${LOCAL_SONAR_TOKEN}" >> $GITHUB_OUTPUT
-          # POR ENQUANTO, VAMOS APENAS EXPOR AS CREDENCIAIS PADRÃO OU PEDIR PARA VOCÊ CONFIGURAR MANUALMENTE
+          echo "SONAR_LOCAL_HOST_URL=http://localhost:9000" >> $GITHUB_ENV
 
-          # Para fins deste workflow, vamos usar as credenciais admin/admin para o Quality Gate.
-          # Em um cenário real, você criaria um token no SonarQube local e o guardaria como um GitHub Secret.
-          echo "SONAR_LOCAL_TOKEN_FOR_QA_GATE=admin:${SONAR_ADMIN_PASSWORD}" >> $GITHUB_ENV
-          echo "SONAR_LOCAL_HOST_URL=${SONAR_LOCAL_HOST}" >> $GITHUB_ENV
+      # NOVO PASSO: Exibir logs do contêiner SonarQube para depuração
+      - name: Exibir logs do contêiner SonarQube
+        if: failure() # Adicionado para exibir logs apenas se o passo anterior falhar
+        run: |
+          SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
+          echo "Capturando logs do contêiner ${SONARQUBE_CONTAINER_NAME}..."
+          docker logs ${SONARQUBE_CONTAINER_NAME} || echo "Contêiner não encontrado ou não rodando. Nenhuma log para exibir."
 
 
       - name: Executar Analise do SonarScanner
         env:
           SONAR_HOST_URL: ${{ env.SONAR_LOCAL_HOST_URL }}
-          # Para o SonarQube local, se você não gerou um token, pode usar as credenciais admin:admin
-          # MAS É RECOMENDADO GERAR UM TOKEN APÓS A PRIMEIRA EXECUÇÃO LOCALMENTE
-          SONAR_TOKEN: ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }} # Crie este secret no GitHub com o token gerado localmente
+          SONAR_TOKEN: ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }}
         run: |
           docker run --rm \
             -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
@@ -106,12 +87,18 @@ jobs:
           SONAR_PROJECT_KEY="fake-shop-local"
           SONAR_LOCAL_HOST="${{ env.SONAR_LOCAL_HOST_URL }}"
           
-          # Se você usar um token gerado e guardado como secret:
-          # AUTH_HEADER="Authorization: Bearer ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }}"
-          # QUALITY_GATE_STATUS=$(curl -s -H "$AUTH_HEADER" "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
-
-          # Se usar admin:admin (para a primeira vez ou simplificado para faculdade):
-          QUALITY_GATE_STATUS=$(curl -s -u admin:${SONAR_ADMIN_PASSWORD} "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
+          # IMPORTANT: Ajuste a autenticação aqui se você estiver usando um token!
+          # Se você usou o secret SONAR_LOCAL_TOKEN_GITHUB_SECRET para o scanner,
+          # então para a API do Quality Gate você também DEVE usar o token.
+          # Caso contrário, se for a primeira vez e você ainda não gerou um token,
+          # pode usar admin:admin (lembre-se que a senha padrão "admin" será alterada na primeira vez)
+          
+          # Se usar o token gerado (RECOMENDADO para produção e workflows)
+          AUTH_HEADER="Authorization: Bearer ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }}"
+          QUALITY_GATE_STATUS=$(curl -s -H "$AUTH_HEADER" "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
+          
+          # Se usar admin:admin (apenas para a PRIMEIRA execução sem token)
+          # QUALITY_GATE_STATUS=$(curl -s -u admin:admin "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
           
           echo "Status do Quality Gate: ${QUALITY_GATE_STATUS}"
           
@@ -124,7 +111,7 @@ jobs:
           fi
 
       - name: Parar e Remover SonarQube Local
-        if: always() # Garante que este passo sempre rodará, mesmo se os anteriores falharem
+        if: always()
         run: |
           SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
           echo "Finalizando e removendo o contêiner SonarQube..."
@@ -133,8 +120,8 @@ jobs:
           echo "Contêiner SonarQube removido."
 
   deploy:
-    needs: [CI, sonar_analysis] # Depende tanto do CI quanto da análise do Sonar
-    if: needs.sonar_analysis.outputs.quality_gate_passed == 'true' # SOMENTE RODA SE O QUALITY GATE PASSAR
+    needs: [CI, sonar_analysis]
+    if: needs.sonar_analysis.outputs.quality_gate_passed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -145,8 +132,6 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             # ... (Seu script de deploy existente aqui) ...
-            # Não mude nada aqui, apenas cole seu script original de deploy.
-            # Certifique-se que o Docker esteja instalado no servidor 201.23.3.86
             docker pull sheila421/fake-shop-app:latest
 
             docker stop fake-shop-app || true
@@ -172,7 +157,7 @@ jobs:
             done
             echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
 
-            sleep 20 # Pequeno atraso ANTES de obter o IP do contêiner
+            sleep 20
 
             DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
