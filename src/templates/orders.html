@@ -1,0 +1,46 @@
+{% extends 'shared/base.html' %}
+{% block content %}
+<div class="container-fluid py-5">
+    <h2 class="section-title position-relative text-uppercase mx-xl-5 mb-4">
+        <span class="bg-secondary pr-3">Pedidos Finalizados</span>
+    </h2>
+    <div class="row px-xl-5">
+        <div class="col-12">
+            {% if pedidos %}
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Número do Pedido</th>
+                        <th>Cliente</th>
+                        <th>Email</th>
+                        <th>Data</th>
+                        <th>Itens</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pedido in pedidos %}
+                    <tr>
+                        <td>{{ pedido.order_number }}</td>
+                        <td>{{ pedido.user_name }}</td>
+                        <td>{{ pedido.user_email }}</td>
+                        <td>{{ pedido.created_at.strftime('%d/%m/%Y %H:%M') if pedido.created_at else '' }}</td>
+                        <td>
+                            <ul>
+                                {% for item in pedido.items %}
+                                <li>{{ item.product.name }} ({{ item.quantity }})</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                        <td>R$ {{ pedido.total_price }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>Nenhum pedido finalizado encontrado.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

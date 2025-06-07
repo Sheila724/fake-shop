@@ -245,6 +245,11 @@ def remove_item(item_id):
     return redirect(url_for('cart'))
 
 
+@app.route('/pedidos')
+def pedidos():
+    pedidos = Order.query.filter_by(is_open=False).order_by(Order.id.desc()).all()
+    return render_template('orders.html', pedidos=pedidos)
+
 @app.route('/')
 def index():
     products = Product.query.all()
