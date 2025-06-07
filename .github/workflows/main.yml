@@ -64,11 +64,11 @@ jobs:
             echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
 
             # ADICIONADO: Pequeno atraso ANTES de obter o IP do contêiner para garantir que ele esteja totalmente registrado.
-            sleep 10 
+            sleep 20 # Aumentado o tempo aqui para ser mais seguro
 
             # OBTER O IP INTERNO DO fake-shop-db PARA A MIGRAÇÃO
-            # Isso contorna problemas de resolução de DNS para a migração.
-            DB_INTERNAL_IP=$(docker inspect -f '{{.NetworkSettings.Networks.rede_da_sheila.IPAddress}}' fake-shop-db)
+            # Corrigindo o nome da rede para 'rede-da-sheila' (com hífen)
+            DB_INTERNAL_IP=$(docker inspect -f '{{.NetworkSettings.Networks.rede-da-sheila.IPAddress}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração: $DB_INTERNAL_IP"
 
             # EXECUTAR MIGRAÇÕES DO BANCO DE DADOS
