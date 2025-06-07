@@ -74,7 +74,7 @@ jobs:
             docker run --rm --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e FLASK_APP=index.py \
-              -e DB_HOST="$DB_INTERNAL_IP" \ # Adicionado aspas para robustez
+              -e DB_HOST="$DB_INTERNAL_IP"\
               sheila421/fake-shop-app:latest flask db upgrade
             MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
@@ -84,7 +84,7 @@ jobs:
 
             docker run -d --name fake-shop-app --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
-              -e DB_HOST="$DB_INTERNAL_IP" \ # Adicionado aspas para robustez
+              -e DB_HOST="$DB_INTERNAL_IP"\  # <--- REMOVA QUALQUER ESPAÇO APÓS ESTE \
               -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5
