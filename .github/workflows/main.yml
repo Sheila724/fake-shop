@@ -40,6 +40,7 @@ jobs:
             docker pull sheila421/fake-shop-app:latest
 
             # Comandos para parar e remover contêineres existentes (se houver)
+            # Isso garante um ambiente limpo para o deploy.
             docker stop fake-shop-app || true
             docker rm fake-shop-app || true
             docker stop fake-shop-db || true
@@ -48,9 +49,36 @@ jobs:
             # Criação da rede (se não existir)
             docker network create rede-da-sheila || true
 
-            # Execução do contêiner do banco de dados
+            # Execução do contêiner do banco de dados (seu próprio DB)
+            # Com credenciais 'ecommerce' e 'Pg1234'
             docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8214:5432 postgres:15
 
-            # Execução do contêiner da aplicação, usando o nome de usuário correto para a imagem
-            # ADICIONADO: Um atraso de 15 segundos para dar tempo ao banco de dados de inicializar
-            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest /bin/sh -c "sleep 15 && /app/entrypoint.sh"
+            # ADICIONADO: Sleep de 30 segundos para garantir que o banco de dados esteja totalmente pronto
+            # Isso é crucial para que a aplicação e as migrações possam se conectar sem erro.
+            sleep 30
+
+            # EXECUTAR MIGRAÇÕES DO BANCO DE DADOS
+            # Este contêiner é temporário (--rm) e se conecta ao DB para aplicar o esquema.
+            # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
+            docker run --rm --network rede-da-sheila --env-file /home/fiona/.env sheila421/fake-shop-app:latest flask db upgrade
+            MIGRATION_STATUS=$? # Captura o status de saída do comando de migração
+            if [ $MIGRATION_STATUS -ne 0 ]; then
+              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
+              exit $MIGRATION_STATUS # Falha o passo do workflow se a migração falhar
+            fi
+
+            # Execução do contêiner da aplicação principal
+            # O comando de inicialização da aplicação é executado diretamente.
+            # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
+            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/fiona/.env -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
+
+            # ADICIONADO: Um pequeno atraso para dar tempo do contêiner iniciar e poder rodar comandos de debug
+            sleep 5
+
+            # CAPTURA AS VARIÁVEIS DE AMBIENTE DENTRO DO CONTÊINER E SALVA EM ARQUIVO
+            docker exec fake-shop-app env > /tmp/app_env_vars.txt
+            # CAPTURA OS LOGS DO CONTÊINER E SALVA EM ARQUIVO
+            docker logs fake-shop-app > /tmp/app_logs.txt
+
+            echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app_logs.txt e /tmp/app_env_vars.txt no servidor."
+            echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
