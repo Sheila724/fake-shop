@@ -71,7 +71,7 @@ jobs:
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
 
             docker run --rm --network rede-da-sheila \
-              --env-file /home/fiona/.env \
+              --env-file /home/aluno/sheila_alves/.env \ # Caminho corrigido aqui
               -e FLASK_APP=index.py \
               -e DB_HOST=$DB_INTERNAL_IP \
               sheila421/fake-shop-app:latest flask db upgrade
@@ -82,7 +82,7 @@ jobs:
             fi
 
             docker run -d --name fake-shop-app --network rede-da-sheila \
-              --env-file /home/fiona/.env \
+              --env-file /home/aluno/sheila_alves/.env \ # E aqui
               -e DB_HOST=$DB_INTERNAL_IP \
               -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
