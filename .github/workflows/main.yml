@@ -60,13 +60,13 @@ jobs:
             # EXECUTAR MIGRAÇÕES DO BANCO DE DADOS
             # Este contêiner é temporário (--rm) e se conecta ao DB para aplicar o esquema.
             # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
-            docker run --rm --network rede-da-sheila --env-file /home/fiona/.env sheila421/fake-shop-app:latest flask db upgrade
-            MIGRATION_STATUS=$? # Captura o status de saída do comando de migração
+            docker run --rm --network rede-da-sheila --env-file /home/fiona/.env -e FLASK_APP=index.py sheila421/fake-shop-app:latest flask db upgrade
+            MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
               echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
-              exit $MIGRATION_STATUS # Falha o passo do workflow se a migração falhar
+              exit $MIGRATION_STATUS
             fi
-
+            
             # Execução do contêiner da aplicação principal
             # O comando de inicialização da aplicação é executado diretamente.
             # Ele usará as credenciais do DB_HOST/DB_USER/DB_PASSWORD do arquivo .env
