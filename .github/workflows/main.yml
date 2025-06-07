@@ -69,11 +69,12 @@ jobs:
 
             DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
+            echo "DEBUG: Valor de DB_HOST antes do docker run: -$DB_INTERNAL_IP-" # Linha de debug extra
 
             docker run --rm --network rede-da-sheila \
-              --env-file /home/aluno/sheila_alves/.env \ # Caminho corrigido aqui
+              --env-file /home/aluno/sheila_alves/.env \
               -e FLASK_APP=index.py \
-              -e DB_HOST=$DB_INTERNAL_IP \
+              -e DB_HOST="$DB_INTERNAL_IP" \ # Adicionado aspas para robustez
               sheila421/fake-shop-app:latest flask db upgrade
             MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
@@ -82,8 +83,8 @@ jobs:
             fi
 
             docker run -d --name fake-shop-app --network rede-da-sheila \
-              --env-file /home/aluno/sheila_alves/.env \ # E aqui
-              -e DB_HOST=$DB_INTERNAL_IP \
+              --env-file /home/aluno/sheila_alves/.env \
+              -e DB_HOST="$DB_INTERNAL_IP" \ # Adicionado aspas para robustez
               -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5
