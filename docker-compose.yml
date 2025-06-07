@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: Pg1234
       POSTGRES_DB: ecommerce
     ports:
-      - "8215:5432"
+      - "8214:5432"
     networks:
       - rede-da-sheila
     volumes:
