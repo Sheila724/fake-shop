@@ -28,7 +28,6 @@ jobs:
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
 
-  # NOVO JOB: Análise do SonarQube
   sonar_analysis:
     needs: CI
     runs-on: ubuntu-latest
@@ -36,41 +35,51 @@ jobs:
       - name: Obtendo o Codigo para Analise
         uses: actions/checkout@v4.2.2
 
-      - name: Instalar 'jq' (necessário para parsear JSON do Quality Gate)
+      - name: Instalar 'jq' e 'curl'
         run: sudo apt-get update && sudo apt-get install -y jq curl
 
       - name: Iniciar e Configurar SonarQube Local Temporario
         id: sonarqube_setup
         run: |
           SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
-          # Não defina SONAR_ADMIN_PASSWORD aqui se não for usar.
-          # SONAR_ADMIN_PASSWORD="admin" # Senha inicial, você DEVE mudar no primeiro uso
+          SONAR_LOCAL_HOST="http://localhost:9000"
+          SONAR_ADMIN_PASSWORD="admin" # Senha padrão. Será usada para autenticação se necessário.
 
           echo "Iniciando o contêiner SonarQube..."
           docker run -d --name ${SONARQUBE_CONTAINER_NAME} -p 9000:9000 -p 9092:9092 sonarqube:lts-community
 
-          echo "Aguardando um tempo fixo para o SonarQube iniciar (isso pode levar alguns minutos)..."
-          # Removido o loop de verificação de status. Agora apenas uma espera fixa.
-          sleep 120 # Espere 2 minutos. Pode ajustar se necessário.
+          echo "Esperando o SonarQube iniciar e estar acessível (isso pode levar alguns minutos)..."
+          for i in $(seq 1 120); do # Aumentei o número de tentativas para 10 minutos (120 * 5s)
+            # Tenta acessar a API de status do SonarQube
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${SONAR_LOCAL_HOST}/api/system/status)
+            
+            # Se você achar que a API de status precisa de autenticação (não deveria para status), use:
+            # STATUS_CODE=$(curl -s -u admin:${SONAR_ADMIN_PASSWORD} -o /dev/null -w "%{http_code}" ${SONAR_LOCAL_HOST}/api/system/status)
 
-          # Este passo é onde o problema pode estar, se o SonarQube não iniciou.
-          # Os logs do próximo passo nos dirão o que aconteceu.
+            if [ "$STATUS_CODE" -eq 200 ]; then
+              echo "SonarQube está online e acessível!"
+              break
+            fi
+            echo "Tentativa $i: SonarQube ainda não está pronto. Status HTTP: $STATUS_CODE. Aguardando..."
+            sleep 5
+          done
 
-          echo "SONAR_LOCAL_HOST_URL=http://localhost:9000" >> $GITHUB_ENV
-
-      # NOVO PASSO: Exibir logs do contêiner SonarQube para depuração
-      - name: Exibir logs do contêiner SonarQube
-        if: failure() # Adicionado para exibir logs apenas se o passo anterior falhar
-        run: |
-          SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
-          echo "Capturando logs do contêiner ${SONARQUBE_CONTAINER_NAME}..."
-          docker logs ${SONARQUBE_CONTAINER_NAME} || echo "Contêiner não encontrado ou não rodando. Nenhuma log para exibir."
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Erro: SonarQube não iniciou ou não ficou acessível a tempo. Abortando a pipeline."
+            # Exibir logs do contêiner antes de sair para depuração
+            echo "--- Logs do SonarQube (antes de falhar) ---"
+            docker logs ${SONARQUBE_CONTAINER_NAME} || true
+            echo "-----------------------------------------"
+            exit 1 # Força a falha do job
+          fi
+          
+          echo "SONAR_LOCAL_HOST_URL=${SONAR_LOCAL_HOST}" >> $GITHUB_ENV
 
 
       - name: Executar Analise do SonarScanner
         env:
           SONAR_HOST_URL: ${{ env.SONAR_LOCAL_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }}
+          SONAR_TOKEN: ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }} # Use seu secret com o token do SonarQube local
         run: |
           docker run --rm \
             -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
@@ -87,17 +96,14 @@ jobs:
           SONAR_PROJECT_KEY="fake-shop-local"
           SONAR_LOCAL_HOST="${{ env.SONAR_LOCAL_HOST_URL }}"
           
-          # IMPORTANT: Ajuste a autenticação aqui se você estiver usando um token!
-          # Se você usou o secret SONAR_LOCAL_TOKEN_GITHUB_SECRET para o scanner,
-          # então para a API do Quality Gate você também DEVE usar o token.
-          # Caso contrário, se for a primeira vez e você ainda não gerou um token,
-          # pode usar admin:admin (lembre-se que a senha padrão "admin" será alterada na primeira vez)
+          # Pequena espera extra para garantir que a análise seja processada pelo SonarQube.
+          sleep 10
           
-          # Se usar o token gerado (RECOMENDADO para produção e workflows)
+          # Autenticação para a API do Quality Gate. Use o token do secret.
           AUTH_HEADER="Authorization: Bearer ${{ secrets.SONAR_LOCAL_TOKEN_GITHUB_SECRET }}"
           QUALITY_GATE_STATUS=$(curl -s -H "$AUTH_HEADER" "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
-          
-          # Se usar admin:admin (apenas para a PRIMEIRA execução sem token)
+
+          # Se o token do secret não estiver configurado OU não funcionar, você pode tentar com admin:admin
           # QUALITY_GATE_STATUS=$(curl -s -u admin:admin "${SONAR_LOCAL_HOST}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" | jq -r .projectStatus.status)
           
           echo "Status do Quality Gate: ${QUALITY_GATE_STATUS}"
@@ -108,13 +114,15 @@ jobs:
           else
             echo "Quality Gate FALHOU! O deploy será abortado."
             echo "quality_gate_passed=false" >> "$GITHUB_OUTPUT"
+            exit 1 # Falha o job explicitamente se o Quality Gate não aprovar
           fi
 
       - name: Parar e Remover SonarQube Local
-        if: always()
+        if: always() # Garante que este passo sempre rodará, mesmo se os anteriores falharem
         run: |
           SONARQUBE_CONTAINER_NAME="my-sonarqube-local"
           echo "Finalizando e removendo o contêiner SonarQube..."
+          # Adicione o '|| true' para evitar que o comando falhe se o contêiner já estiver parado/removido
           docker stop ${SONARQUBE_CONTAINER_NAME} > /dev/null 2>&1 || true
           docker rm ${SONARQUBE_CONTAINER_NAME} > /dev/null 2>&1 || true
           echo "Contêiner SonarQube removido."
