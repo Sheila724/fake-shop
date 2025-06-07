@@ -1,0 +1,48 @@
+name: CI-CD
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs: 
+  CI: 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtendo o Codigo
+        uses: actions/checkout@v4.2.2 
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Construcao e Envio da Imagem Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          push: true
+          file: ./src/Dockerfile
+          tags: |
+            sheila/fake-shop-app:latest
+            sheila/fake-shop-app:v${{ github.run_number }}
+
+  deploy:
+    needs: CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker pull sheila/fake-shop-app:latest
+            docker stop fake-shop-app || true
+            docker rm fake-shop-app || true
+            docker stop fake-shop-db || true
+            docker rm fake-shop-db || true
+            docker network create rede-da-sheila || true
+            docker run -d --name fake-shop-db --network rede-da-sheila -e POSTGRES_USER=ecommerce -e POSTGRES_PASSWORD=Pg1234 -e POSTGRES_DB=ecommerce -p 8214:5432 postgres:15
+            docker run -d --name fake-shop-app --network rede-da-sheila --env-file /CAMINHO/PARA/.env -p 8213:8213 sheila/fake-shop-app:latest
+
+
