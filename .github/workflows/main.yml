@@ -21,7 +21,7 @@ jobs:
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
-          context: .  # <<<<<<<<<< CORREÇÃO AQUI: Garante que a pasta 'migrations' seja incluída na imagem
+          context: .  
           push: true
           file: ./src/Dockerfile
           tags: |
