@@ -21,9 +21,9 @@ jobs:
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
-          context: ./src # Caminho do contexto para o Dockerfile (supondo que Dockerfile e outros arquivos estão em 'src')
+          context: ./src
           push: true
-          file: ./src/Dockerfile # Caminho do Dockerfile dentro do contexto
+          file: ./src/Dockerfile
           tags: |
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
@@ -50,9 +50,6 @@ jobs:
             docker network rm rede-da-sheila || true
             docker network create rede-da-sheila || true
 
-            # Comando para criar o volume Docker, se ele ainda não existir
-            docker volume create fake-shop-db-data || true
-
             docker run -d --name fake-shop-db --network rede-da-sheila \
               -e POSTGRES_USER=ecommerce \
               -e POSTGRES_PASSWORD=Pg1234 \
@@ -68,16 +65,15 @@ jobs:
             done
             echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
 
-            sleep 5
+            sleep 20
 
             DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
-            echo "DEBUG: Valor de DB_HOST antes do docker run: -$DB_INTERNAL_IP-" # Linha de debug extra
 
             docker run --rm --network rede-da-sheila \
-              --env-file /home/aluno/sheila_alves/.env \
+              --env-file /home/aluno/sheila_alves/.env \ # Caminho corrigido aqui
               -e FLASK_APP=index.py \
-              -e DB_HOST="$DB_INTERNAL_IP"\
+              -e DB_HOST=$DB_INTERNAL_IP \
               sheila421/fake-shop-app:latest flask db upgrade
             MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
@@ -85,11 +81,9 @@ jobs:
               exit $MIGRATION_STATUS
             fi
 
-            # Inicia o contêiner da aplicação em modo detached (-d) e com mapeamento de porta (-p)
-            # AQUI ESTÁ A CORREÇÃO FINAL PARA O -d
             docker run -d --name fake-shop-app --network rede-da-sheila \
-              --env-file /home/aluno/sheila_alves/.env \
-              -e DB_HOST="$DB_INTERNAL_IP"\
+              --env-file /home/aluno/sheila_alves/.env \ # E aqui
+              -e DB_HOST=$DB_INTERNAL_IP \
               -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5
@@ -97,5 +91,5 @@ jobs:
             docker exec fake-shop-app env > /tmp/app_env_vars.txt
             docker logs fake-shop-app > /tmp/app_logs.txt
 
-            echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app/logs.txt e /tmp/app_env_vars.txt no servidor."
+            echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app_logs.txt e /tmp/app_env_vars.txt no servidor."
             echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
