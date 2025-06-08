@@ -86,10 +86,11 @@ jobs:
             fi
 
             # Inicia o contêiner da aplicação em modo detached (-d) e com mapeamento de porta (-p)
+            # <<<<<<<<<< CORREÇÃO AQUI: ADIÇÃO DO -d NO INÍCIO DO COMANDO docker run
             docker run -d --name fake-shop-app --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e DB_HOST="$DB_INTERNAL_IP"\
-              -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh # <<<<<<<<<< CORREÇÃO AQUI DO -p E -d
+              -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5
 
