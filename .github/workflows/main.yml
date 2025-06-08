@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4.2.2 # CORREÇÃO AQUI: actions/checkout
+        uses: actions/checkout@v4.2.2
 
       - name: Login no Docker Hub
         uses: docker/login-action@v3
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4.2.2 # CORREÇÃO AQUI: actions/checkout
+        uses: actions/checkout@v4.2.2
 
       # NOVO STEP: Iniciar SonarQube Temporário (inclui criação da rede agora)
       - name: Iniciar SonarQube Temporário no Servidor
@@ -48,9 +48,10 @@ jobs:
             docker stop sonarqube || true
             docker rm sonarqube || true
             
-            # CRIAÇÃO DA REDE AGORA NO MESMO SCRIPT, ANTES DO DOCKER RUN
+            # CRIAÇÃO DA REDE E DELAY PARA GARANTIR DISPONIBILIDADE
             docker network rm rede-do-sonar || true # Tenta remover (ignora erro se não existir)
             docker network create rede-do-sonar # Cria a rede
+            sleep 1 # <<<<<<<<<<<< ADICIONADO AQUI: Um pequeno atraso após criar a rede
             echo "DEBUG: Rede 'rede-do-sonar' criada/preparada."
 
             # Iniciar o SonarQube Server TEMPORARIAMENTE
@@ -64,7 +65,7 @@ jobs:
 
       # Passo 3: Executar a Análise com SonarScanner no runner do GitHub Actions
       - name: Executar Análise SonarQube
-        uses: SonarSource/sonarcloud-github-action@v2.2.0 # CORREÇÃO AQUI: SonarSource/sonarcloud-github-action
+        uses: SonarSource/sonarcloud-github-action@v2.2.0 # Usando a ação oficial para o scanner
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Secret com seu token do SonarQube
         with:
