@@ -1,6 +1,6 @@
 FROM python:3.11.0
 EXPOSE 8213
-COPY requirements.txt .
+COPY src/requirements.txt /app/requirements.txt
 RUN python -m pip install -r requirements.txt
 WORKDIR /app
 COPY . /app
