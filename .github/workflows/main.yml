@@ -84,3 +84,4 @@ jobs:
             docker logs fake-shop-app > /tmp/app_logs.txt
             echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app_logs.txt e /tmp/app_env_vars.txt no servidor."
             echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
+#teste
