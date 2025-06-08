@@ -44,17 +44,12 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: | # Usando | para scripts multi-linha
             echo "DEBUG: Iniciando SonarQube temporario no servidor..."
-            # Limpeza inicial de contêineres e redes antigas do SonarQube
-            docker stop sonarqube || true
-            docker rm sonarqube || true
-            docker network rm rede-do-sonar || true
-
-            # Criar rede dedicada para o SonarQube
-            docker network create rede-do-sonar
-
-            # Iniciar o SonarQube Server TEMPORARIAMENTE
-            # Mapeia a porta 9000 do contêiner para a 8215 do host
-            # Usando sonarqube:9.9-community (LTS com H2 embarcado para temp, se precisar de PG, adicione o docker run para ele)
+            # Agrupamento de comandos de limpeza e criação de rede/container
+            # Isso garante que a rede seja criada antes de ser usada pelo docker run
+            (docker stop sonarqube || true) && \
+            (docker rm sonarqube || true) && \
+            (docker network rm rede-do-sonar || true) && \
+            docker network create rede-do-sonar && \
             docker run -d --name sonarqube --network rede-do-sonar -p 8215:9000 sonarqube:9.9-community
 
             echo "DEBUG: Aguardando o servidor SonarQube ficar disponível na porta 8215..."
@@ -140,7 +135,6 @@ jobs:
             fi
 
             # Inicia o contêiner da aplicação (todo em uma linha Bash)
-            # A porta para a aplicação agora é 8213:8213 (conforme as últimas correções)
             docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/aluno/sheila_alves/.env -e DB_HOST="${DB_INTERNAL_IP}" -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5 # Dar um tempo para a aplicação iniciar
