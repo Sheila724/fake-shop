@@ -35,35 +35,6 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4.2.2
 
-      - name: Acesso remoto para rodar SonarQube temporário e análise
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            docker stop sonarqube || true
-            docker rm sonarqube || true
-            docker run -d --name sonarqube -p 9000:9000 \
-              --memory="1g" \
-              -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-              -e JAVA_OPTS="-Xms256m -Xmx768m" \
-              sonarqube:community
-            echo "Aguardando SonarQube iniciar..."
-            MAX_RETRIES=15
-            COUNT=0
-            until curl -s http://localhost:9000/api/system/health | grep -q '"status":"GREEN"'; do
-              echo "SonarQube não está pronto ainda... tentativa $COUNT"
-              sleep 20
-              COUNT=$((COUNT+1))
-              if [ $COUNT -ge $MAX_RETRIES ]; then
-                echo "Timeout aguardando SonarQube ficar pronto."
-                docker logs sonarqube
-                exit 1
-              fi
-            done
-            echo "SonarQube pronto para análise."
-
       - name: Instala Java e Scanner
         run: |
           sudo apt-get update
@@ -77,28 +48,18 @@ jobs:
           ./sonar-scanner/bin/sonar-scanner \
             -Dsonar.projectKey=fake-shop-app \
             -Dsonar.projectBaseDir=src \
-            -Dsonar.host.url=http://201.23.3.86:9000 \
+            -Dsonar.host.url=http://201.23.3.86:8212 \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
       - name: Verificar resultado da análise
         run: |
           sleep 10
-          ANALYSIS_STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" http://201.23.3.86:9000/api/qualitygates/project_status?projectKey=fake-shop-app | jq -r '.projectStatus.status')
+          ANALYSIS_STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" http://201.23.3.86:8212/api/qualitygates/project_status?projectKey=fake-shop-app | jq -r '.projectStatus.status')
           echo "STATUS DA ANÁLISE: $ANALYSIS_STATUS"
           if [ "$ANALYSIS_STATUS" != "OK" ]; then
             echo "Análise reprovada. Pipeline cancelado."
             exit 1
           fi
-
-      - name: Parar e remover SonarQube
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            docker stop sonarqube
-            docker rm sonarqube
 
   deploy:
     needs: sonar-analysis
@@ -143,3 +104,4 @@ jobs:
               --env-file /home/aluno/sheila_alves/.env \
               -e DB_HOST="$DB_INTERNAL_IP" \
               -p 8217:8217 sheila421/fake-shop-app:latest /app/entrypoint.sh
+
