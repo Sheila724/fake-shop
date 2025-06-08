@@ -46,6 +46,7 @@ jobs:
       - name: Executar análise com SonarScanner
         run: |
           ./sonar-scanner/bin/sonar-scanner \
+            -X \
             -Dsonar.projectKey=fake-shop-app \
             -Dsonar.projectBaseDir=src \
             -Dsonar.host.url=http://201.23.3.86:8212 \
