@@ -35,7 +35,7 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4.2.2
 
-      # NOVO STEP: Iniciar SonarQube Temporário (inclui criação da rede agora)
+      # NOVO STEP: Iniciar SonarQube Temporário (AGORA COM --network host)
       - name: Iniciar SonarQube Temporário no Servidor
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -44,21 +44,16 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: | # Usando | para scripts multi-linha
             echo "DEBUG: Iniciando SonarQube temporario no servidor..."
-            # Limpeza inicial de contêineres e redes antigas do SonarQube
+            # Limpeza inicial de contêineres antigos do SonarQube (rede não é removida agora)
             docker stop sonarqube || true
             docker rm sonarqube || true
+            # REMOVIDO: docker network rm rede-do-sonar || true (Não precisamos mais dela)
+            # REMOVIDO: docker network create rede-do-sonar (Não precisamos mais dela)
+            # REMOVIDO: Loop de espera pela rede (Não precisamos mais dela)
             
-            # CRIAÇÃO DA REDE E ESPERA ATÉ ESTAR PRONTA (NOVA LÓGICA DE ESPERA)
-            docker network rm rede-do-sonar || true # Tenta remover (ignora erro se não existir)
-            docker network create rede-do-sonar # Cria a rede
-            
-            # LOOP DE ESPERA PARA A REDE FICAR PRONTA (CRÍTICO)
-            echo "DEBUG: Aguardando a rede 'rede-do-sonar' estar totalmente pronta..."
-            timeout 60 bash -c 'until docker network inspect rede-do-sonar &>/dev/null; do echo "DEBUG: Rede nao esta pronta ainda. Tentando novamente em 2 segundos..."; sleep 2; done' || { echo "ERRO: A rede 'rede-do-sonar' nao ficou pronta no tempo esperado."; exit 1; }
-            echo "DEBUG: Rede 'rede-do-sonar' esta pronta!"
-
-            # Iniciar o SonarQube Server TEMPORARIAMENTE
-            docker run -d --name sonarqube --network rede-do-sonar -p 8215:9000 sonarqube:9.9-community
+            # Iniciar o SonarQube Server TEMPORARIAMENTE usando a rede do host
+            # Isso deve resolver o problema "network not found"
+            docker run -d --name sonarqube --network host -p 8215:9000 sonarqube:9.9-community
 
             echo "DEBUG: Aguardando o servidor SonarQube ficar disponível na porta 8215..."
             # Esperar o SonarQube ficar disponível (com timeout)
@@ -73,14 +68,13 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Secret com seu token do SonarQube
         with:
           projectBaseDir: ./src # Ação deve escanear o código fonte dentro da pasta 'src'
-          args: >- # Usando '>-' para passar argumentos para o scanner
-            -Dsonar.projectKey=fake-shop-app
-            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:8215
-            -Dsonar.sources=.
-            -Dsonar.python.version=3.11
-            -Dsonar.python.file.suffixes=.py
-            -Dsonar.qualitygate.wait=true
-            # Removidos comentários inline aqui para evitar erro de sintaxe
+          args: >- # Usando '>-' para passar argumentos para o scanner, garantindo que sejam interpretados como uma única linha
+            -Dsonar.projectKey=fake-shop-app # Chave do projeto no SonarQube
+            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:8215 # Endereço do SonarQube temporário
+            -Dsonar.sources=. # O scanner vai escanear o diretório base do projectBaseDir
+            -Dsonar.python.version=3.11 # Versão do Python do seu projeto
+            -Dsonar.python.file.suffixes=.py # Sufixos de arquivos Python para análise
+            -Dsonar.qualitygate.wait=true # Fazer a pipeline falhar se o Quality Gate não for aprovado
 
       # Passo 4: Finalizar e Remover o SonarQube temporário no servidor remoto
       - name: Finalizar e Remover SonarQube Temporário
@@ -94,7 +88,7 @@ jobs:
             echo "DEBUG: Finalizando e removendo containers SonarQube temporarios...";
             docker stop sonarqube || true;
             docker rm sonarqube || true;
-            docker network rm rede-do-sonar || true; # Remover rede
+            # REMOVIDO: docker network rm rede-do-sonar || true (Não precisamos mais dela)
             echo "DEBUG: SonarQube temporario finalizado e removido.";
 
   deploy: # Job de deploy (só executa se a análise do SonarQube passar)
@@ -139,7 +133,7 @@ jobs:
             
             # Condicional para verificar o status da migração (estrutura Bash em múltiplas linhas do YAML)
             if [ $MIGRATION_STATUS -ne 0 ]; then
-              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
+              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs do workflow para mais detalhes."
               exit $MIGRATION_STATUS
             fi
 
