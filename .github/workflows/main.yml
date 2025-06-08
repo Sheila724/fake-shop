@@ -68,7 +68,7 @@ jobs:
             done
             echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
 
-            sleep 20
+            sleep 5
 
             DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
@@ -98,4 +98,4 @@ jobs:
             docker logs fake-shop-app > /tmp/app_logs.txt
 
             echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app/logs.txt e /tmp/app_env_vars.txt no servidor."
-            echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar.""
+            echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
