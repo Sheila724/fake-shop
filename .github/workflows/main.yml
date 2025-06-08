@@ -60,7 +60,7 @@ jobs:
           projectBaseDir: ./src
           args: >-
             -Dsonar.projectKey=fake-shop-app
-            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:9000
+            -Dsonar.host.url=http://201.23.3.86:9000
             -Dsonar.sources=.
             -Dsonar.python.version=3.11
             -Dsonar.python.file.suffixes=.py
