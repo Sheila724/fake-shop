@@ -49,13 +49,13 @@ jobs:
             -X \
             -Dsonar.projectKey=fake-shop-app \
             -Dsonar.projectBaseDir=src \
-            -Dsonar.host.url=http://201.23.3.86:8212 \
+            -Dsonar.host.url=http://201.23.3.86:8215 \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
       - name: Verificar resultado da análise
         run: |
           sleep 10
-          ANALYSIS_STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" http://201.23.3.86:8212/api/qualitygates/project_status?projectKey=fake-shop-app | jq -r '.projectStatus.status')
+          ANALYSIS_STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" http://201.23.3.86:8215/api/qualitygates/project_status?projectKey=fake-shop-app | jq -r '.projectStatus.status')
           echo "STATUS DA ANÁLISE: $ANALYSIS_STATUS"
           if [ "$ANALYSIS_STATUS" != "OK" ]; then
             echo "Análise reprovada. Pipeline cancelado."
