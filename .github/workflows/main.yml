@@ -129,7 +129,7 @@ jobs:
             
             # Condicional para verificar o status da migração (estrutura Bash em múltiplas linhas do YAML)
             if [ $MIGRATION_STATUS -ne 0 ]; then
-              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs do workflow para mais detalhes."
+              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
               exit $MIGRATION_STATUS
             fi
 
