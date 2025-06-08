@@ -14,7 +14,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 512M
 
 volumes:
   sonarqube_data:
