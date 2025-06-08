@@ -21,7 +21,7 @@ jobs:
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
-          context: ./src
+          context: .  # <<<<<<<<<< CORREÇÃO AQUI: Garante que a pasta 'migrations' seja incluída na imagem
           push: true
           file: ./src/Dockerfile
           tags: |
@@ -51,14 +51,14 @@ jobs:
             docker network create rede-da-sheila || true
 
             # Comando para criar o volume Docker, se ele ainda não existir
-            docker volume create fake-shop-db-data || true
+            docker volume create fake-shop-db-data || true # <<<<<<<<<< Comando para criar o volume persistente
 
             docker run -d --name fake-shop-db --network rede-da-sheila \
               -e POSTGRES_USER=ecommerce \
               -e POSTGRES_PASSWORD=Pg1234 \
               -e POSTGRES_DB=ecommerce \
               -p 8214:5432 \
-              -v fake-shop-db-data:/var/lib/postgresql/data \
+              -v fake-shop-db-data:/var/lib/postgresql/data \ # <<<<<<<<<< Monta o volume para persistência
               postgres:15
 
             echo "DEBUG: Aguardando o banco de dados 'fake-shop-db' ficar disponível na porta 5432..."
