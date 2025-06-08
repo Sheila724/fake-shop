@@ -20,7 +20,7 @@ RUN ls -la /app/entrypoint.sh # Tenta listar o arquivo específico
 # ----------------------------------
 
 # Expõe a porta que sua aplicação usa
-EXPOSE 8213
+EXPOSE 8217
 
 # Comando para tornar o entrypoint.sh executável e usá-lo como ENTRYPOINT
 RUN chmod +x /app/entrypoint.sh
