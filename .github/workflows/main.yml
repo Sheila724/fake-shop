@@ -74,7 +74,7 @@ jobs:
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
             echo "DEBUG: Valor de DB_HOST antes do docker run: -$DB_INTERNAL_IP-" # Linha de debug extra
 
-            docker run --rm --network rede-da-sheila \
+            docker run -d --name fake-shop-app --network rede-da-sheila\
               --env-file /home/aluno/sheila_alves/.env \
               -e FLASK_APP=index.py \
               -e DB_HOST="$DB_INTERNAL_IP"\
