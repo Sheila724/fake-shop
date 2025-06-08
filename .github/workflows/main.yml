@@ -73,13 +73,14 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Secret com seu token do SonarQube
         with:
           projectBaseDir: ./src # Ação deve escanear o código fonte dentro da pasta 'src'
-          args: >- # Usando '>-' para passar argumentos para o scanner, garantindo que sejam interpretados como uma única linha
-            -Dsonar.projectKey=fake-shop-app # Chave do projeto no SonarQube
-            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:8215 # Endereço do SonarQube temporário
-            -Dsonar.sources=. # O scanner vai escanear o diretório base do projectBaseDir
-            -Dsonar.python.version=3.11 # Versão do Python do seu projeto
-            -Dsonar.python.file.suffixes=.py # Sufixos de arquivos Python para análise
-            -Dsonar.qualitygate.wait=true # Fazer a pipeline falhar se o Quality Gate não for aprovado
+          args: >- # Usando '>-' para passar argumentos para o scanner
+            -Dsonar.projectKey=fake-shop-app
+            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:8215
+            -Dsonar.sources=.
+            -Dsonar.python.version=3.11
+            -Dsonar.python.file.suffixes=.py
+            -Dsonar.qualitygate.wait=true
+            # Removidos comentários inline aqui para evitar erro de sintaxe
 
       # Passo 4: Finalizar e Remover o SonarQube temporário no servidor remoto
       - name: Finalizar e Remover SonarQube Temporário
