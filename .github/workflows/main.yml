@@ -23,7 +23,7 @@ jobs:
         with:
           context: .  # <<<<<<<<<< CORREÇÃO AQUI: Garante que a pasta 'migrations' seja incluída na imagem
           push: true
-          file: ./Dockerfile
+          file: ./src/Dockerfile
           tags: |
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
