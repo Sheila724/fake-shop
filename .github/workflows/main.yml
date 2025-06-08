@@ -21,9 +21,9 @@ jobs:
       - name: Construcao e Envio da Imagem Docker
         uses: docker/build-push-action@v6
         with:
-          context: ./src
+          context: ./src # Caminho do contexto para o Dockerfile (supondo que Dockerfile e outros arquivos estão em 'src')
           push: true
-          file: ./src/Dockerfile
+          file: ./src/Dockerfile # Caminho do Dockerfile dentro do contexto
           tags: |
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
@@ -51,7 +51,7 @@ jobs:
             docker network create rede-da-sheila || true
 
             # Comando para criar o volume Docker, se ele ainda não existir
-            docker volume create fake-shop-db-data || true # <<<<<<<<<< Comando para criar o volume persistente
+            docker volume create fake-shop-db-data || true
 
             docker run -d --name fake-shop-db --network rede-da-sheila \
               -e POSTGRES_USER=ecommerce \
@@ -74,7 +74,7 @@ jobs:
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
             echo "DEBUG: Valor de DB_HOST antes do docker run: -$DB_INTERNAL_IP-" # Linha de debug extra
 
-            docker run -d --name fake-shop-app --network rede-da-sheila\
+            docker run --rm --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e FLASK_APP=index.py \
               -e DB_HOST="$DB_INTERNAL_IP"\
@@ -85,10 +85,11 @@ jobs:
               exit $MIGRATION_STATUS
             fi
 
+            # Inicia o contêiner da aplicação em modo detached (-d) e com mapeamento de porta (-p)
             docker run -d --name fake-shop-app --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e DB_HOST="$DB_INTERNAL_IP"\
-              -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
+              -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh # <<<<<<<<<< CORREÇÃO AQUI DO -p E -d
 
             sleep 5
 
