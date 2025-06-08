@@ -48,11 +48,14 @@ jobs:
             docker stop sonarqube || true
             docker rm sonarqube || true
             
-            # CRIAÇÃO DA REDE E DELAY PARA GARANTIR DISPONIBILIDADE
+            # CRIAÇÃO DA REDE E ESPERA ATÉ ESTAR PRONTA (NOVA LÓGICA DE ESPERA)
             docker network rm rede-do-sonar || true # Tenta remover (ignora erro se não existir)
             docker network create rede-do-sonar # Cria a rede
-            sleep 1 # <<<<<<<<<<<< ADICIONADO AQUI: Um pequeno atraso após criar a rede
-            echo "DEBUG: Rede 'rede-do-sonar' criada/preparada."
+            
+            # LOOP DE ESPERA PARA A REDE FICAR PRONTA (CRÍTICO)
+            echo "DEBUG: Aguardando a rede 'rede-do-sonar' estar totalmente pronta..."
+            timeout 60 bash -c 'until docker network inspect rede-do-sonar &>/dev/null; do echo "DEBUG: Rede nao esta pronta ainda. Tentando novamente em 2 segundos..."; sleep 2; done' || { echo "ERRO: A rede 'rede-do-sonar' nao ficou pronta no tempo esperado."; exit 1; }
+            echo "DEBUG: Rede 'rede-do-sonar' esta pronta!"
 
             # Iniciar o SonarQube Server TEMPORARIAMENTE
             docker run -d --name sonarqube --network rede-do-sonar -p 8215:9000 sonarqube:9.9-community
