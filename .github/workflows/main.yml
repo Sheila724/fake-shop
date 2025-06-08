@@ -35,7 +35,7 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4.2.2
 
-      # NOVO STEP: Iniciar SonarQube Temporário (AGORA COM --network host)
+      # NOVO STEP: Iniciar SonarQube Temporário (inclui criação da rede agora)
       - name: Iniciar SonarQube Temporário no Servidor
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -47,17 +47,15 @@ jobs:
             # Limpeza inicial de contêineres antigos do SonarQube (rede não é removida agora)
             docker stop sonarqube || true
             docker rm sonarqube || true
-            # REMOVIDO: docker network rm rede-do-sonar || true (Não precisamos mais dela)
-            # REMOVIDO: docker network create rede-do-sonar (Não precisamos mais dela)
-            # REMOVIDO: Loop de espera pela rede (Não precisamos mais dela)
             
             # Iniciar o SonarQube Server TEMPORARIAMENTE usando a rede do host
-            # Isso deve resolver o problema "network not found"
-            docker run -d --name sonarqube --network host -p 8215:9000 sonarqube:9.9-community
+            # REMOVIDO: -p 8215:9000 (Portas são descartadas em network host)
+            docker run -d --name sonarqube --network host sonarqube:9.9-community
 
-            echo "DEBUG: Aguardando o servidor SonarQube ficar disponível na porta 8215..."
+            echo "DEBUG: Aguardando o servidor SonarQube ficar disponível na porta 9000 (host)..." # DEBUG MUDADO PARA PORTA 9000
             # Esperar o SonarQube ficar disponível (com timeout)
-            timeout 300 bash -c 'until curl -s http://localhost:8215/api/system/status | grep -q "\"status\":\"UP\""; do echo "DEBUG: SonarQube nao esta pronto ainda. Tentando novamente em 10 segundos..."; sleep 10; done' || { echo "ERRO: SonarQube nao subiu no tempo esperado. Verifique os logs do docker no servidor."; exit 1; }
+            # URL de verificação mudou para porta 9000
+            timeout 300 bash -c 'until curl -s http://localhost:9000/api/system/status | grep -q "\"status\":\"UP\""; do echo "DEBUG: SonarQube nao esta pronto ainda. Tentando novamente em 10 segundos..."; sleep 10; done' || { echo "ERRO: SonarQube nao subiu no tempo esperado. Verifique os logs do docker no servidor."; exit 1; }
             echo "DEBUG: Servidor SonarQube esta pronto!"
             sleep 30 # Dar um tempo extra para SonarQube inicializar totalmente seus serviços internos
 
@@ -70,7 +68,7 @@ jobs:
           projectBaseDir: ./src # Ação deve escanear o código fonte dentro da pasta 'src'
           args: >- # Usando '>-' para passar argumentos para o scanner, garantindo que sejam interpretados como uma única linha
             -Dsonar.projectKey=fake-shop-app # Chave do projeto no SonarQube
-            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:8215 # Endereço do SonarQube temporário
+            -Dsonar.host.url=http://${{ secrets.SERVER_IP }}:9000 # <<<<<<<<<< CORREÇÃO AQUI: PORTA 9000
             -Dsonar.sources=. # O scanner vai escanear o diretório base do projectBaseDir
             -Dsonar.python.version=3.11 # Versão do Python do seu projeto
             -Dsonar.python.file.suffixes=.py # Sufixos de arquivos Python para análise
