@@ -48,16 +48,23 @@ jobs:
               -p 9000:9000 \
               sonarqube:community
             echo "Aguardando SonarQube iniciar..."
+            MAX_RETRIES=10
+            COUNT=0
             until curl -s http://localhost:9000/api/system/health | grep -q '"status":"GREEN"'; do
               echo "SonarQube não está pronto ainda..."
-              sleep 10
+              sleep 20
+              COUNT=$((COUNT+1))
+              if [ $COUNT -ge $MAX_RETRIES ]; then
+                echo "Timeout aguardando SonarQube ficar pronto."
+                exit 1
+              fi
             done
             echo "SonarQube pronto para análise."
 
       - name: Instala Java e Scanner
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk unzip wget
+          sudo apt-get install -y openjdk-17-jdk unzip wget jq
           wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
           unzip sonar-scanner-cli-5.0.1.3006-linux.zip
           mv sonar-scanner-5.0.1.3006-linux sonar-scanner
@@ -101,7 +108,6 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # (Seu script de deploy permanece aqui igual ao anterior)
             echo "Iniciando deploy..."
             docker pull sheila421/fake-shop-app:latest
             docker stop fake-shop-app || true
@@ -134,5 +140,6 @@ jobs:
               --env-file /home/aluno/sheila_alves/.env \
               -e DB_HOST="$DB_INTERNAL_IP" \
               -p 8217:8217 sheila421/fake-shop-app:latest /app/entrypoint.sh
+
 
 
