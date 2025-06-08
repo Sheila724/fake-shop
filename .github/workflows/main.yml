@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4.2.2
+        uses: actions:checkout@v4.2.2
 
       - name: Login no Docker Hub
         uses: docker/login-action@v3
@@ -35,20 +35,10 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4.2.2
 
-      # NOVO STEP 1: Limpa e Cria Rede SonarQube
-      - name: Preparar Rede SonarQube
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: | # Usando | para scripts multi-linha
-            echo "DEBUG: Preparando rede 'rede-do-sonar'..."
-            docker network rm rede-do-sonar || true # Tenta remover (ignora erro se não existir)
-            docker network create rede-do-sonar # Cria a rede
-            echo "DEBUG: Rede 'rede-do-sonar' criada/preparada."
+      # STEP 'Preparar Rede SonarQube' REMOVIDO DAQUI
+      # e seu conteúdo movido para o step 'Iniciar SonarQube Temporário no Servidor'
 
-      # NOVO STEP 2: Iniciar SonarQube Temporário
+      # NOVO STEP: Iniciar SonarQube Temporário (inclui criação da rede agora)
       - name: Iniciar SonarQube Temporário no Servidor
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -57,13 +47,16 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: | # Usando | para scripts multi-linha
             echo "DEBUG: Iniciando SonarQube temporario no servidor..."
-            # Assegura que contêineres antigos do SonarQube não bloqueiem a porta
+            # Limpeza inicial de contêineres e redes antigas do SonarQube
             docker stop sonarqube || true
             docker rm sonarqube || true
+            
+            # CRIAÇÃO DA REDE AGORA NO MESMO SCRIPT, ANTES DO DOCKER RUN
+            docker network rm rede-do-sonar || true # Tenta remover (ignora erro se não existir)
+            docker network create rede-do-sonar # Cria a rede
+            echo "DEBUG: Rede 'rede-do-sonar' criada/preparada."
 
             # Iniciar o SonarQube Server TEMPORARIAMENTE
-            # Mapeia a porta 9000 do contêiner para a 8215 do host
-            # Confirma que a rede é 'rede-do-sonar'
             docker run -d --name sonarqube --network rede-do-sonar -p 8215:9000 sonarqube:9.9-community
 
             echo "DEBUG: Aguardando o servidor SonarQube ficar disponível na porta 8215..."
@@ -149,7 +142,6 @@ jobs:
             fi
 
             # Inicia o contêiner da aplicação (todo em uma linha Bash)
-            # A porta para a aplicação agora é 8213:8213 (conforme as últimas correções)
             docker run -d --name fake-shop-app --network rede-da-sheila --env-file /home/aluno/sheila_alves/.env -e DB_HOST="${DB_INTERNAL_IP}" -p 8213:8213 sheila421/fake-shop-app:latest /app/entrypoint.sh
 
             sleep 5 # Dar um tempo para a aplicação iniciar
