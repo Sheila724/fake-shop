@@ -86,7 +86,7 @@ jobs:
       - name: Verificar se a análise foi aprovada
         if: failure()
         run: |
-          echo "❌ Análise falhou no Quality Gate. Encerrando pipeline."
+          echo "Análise falhou no Quality Gate. Encerrando pipeline."
           exit 1
 
       - name: Deploy da aplicação no servidor (após aprovação)
