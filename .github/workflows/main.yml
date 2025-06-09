@@ -45,19 +45,20 @@ jobs:
       # PASSO 2: Iniciar SonarQube Temporário no Servidor (Usando abordagem do colega)
       - name: Iniciar SonarQube Temporário no Servidor
         env:
-          SERVER_IP: ${{ secrets.SERVER_IP }} # Passa o IP do servidor como variável de ambiente
-        run: | # Usando 'run' e o comando 'ssh' direto
+          SERVER_IP: ${{ secrets.SERVER_IP }} # A variável é definida aqui no ambiente do step
+        run: | # O script abaixo roda no runner local
           echo "DEBUG: Iniciando SonarQube temporario no servidor..."
           # Comandos a serem executados no servidor remoto
-          ssh -o StrictHostKeyChecking=no aluno@$SERVER_IP <<EOF
+          # Use ${SERVER_IP} para garantir que a variável seja expandida corretamente
+          ssh -o StrictHostKeyChecking=no aluno@${SERVER_IP} <<EOF
             docker stop sonarqube_temp || true
             docker rm sonarqube_temp || true
-            # Iniciar SonarQube na porta 9000, usando a rede padrão do Docker (bridge)
             docker run -d --name sonarqube_temp -p 9000:9000 sonarqube:9.9-community
           EOF
           echo "DEBUG: SonarQube temporario iniciado. Aguardando ficar disponível..."
-          # Esperar o SonarQube ficar disponível (mais robusto que sleep fixo)
-          timeout 300 bash -c 'until curl -s http://${{ secrets.SERVER_IP }}:9000/api/system/status | grep -q "\"status\":\"UP\""; do echo "DEBUG: SonarQube nao esta pronto ainda. Tentando novamente em 10 segundos..."; sleep 10; done' || { echo "ERRO: SonarQube nao subiu no tempo esperado. Verifique os logs do docker no servidor."; exit 1; }
+          # Esperar o SonarQube ficar disponível (com timeout)
+          # Use ${SERVER_IP} aqui também, pois é uma variável do ambiente do runner
+          timeout 300 bash -c 'until curl -s http://${SERVER_IP}:9000/api/system/status | grep -q "\"status\":\"UP\""; do echo "DEBUG: SonarQube nao esta pronto ainda. Tentando novamente em 10 segundos..."; sleep 10; done' || { echo "ERRO: SonarQube nao subiu no tempo esperado. Verifique os logs do docker no servidor."; exit 1; }
           echo "DEBUG: Servidor SonarQube esta pronto!"
           sleep 30 # Dar um tempo extra para SonarQube inicializar totalmente seus serviços internos
 
@@ -74,16 +75,17 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.python.version=3.11
             -Dsonar.python.file.suffixes=.py
-            -Dsonar.qualitygate.wait=true # ISSO FAZ A PIPELINE FALHAR SE O QUALITY GATE NÃO PASSAR
+            -Dsonar.qualitygate.wait=true
 
       # PASSO 4: Finalizar e Remover o SonarQube temporário no servidor remoto
       - name: Finalizar e Remover SonarQube Temporário
         if: always() # Garante que este step seja executado mesmo se a análise falhar
         env:
-          SERVER_IP: ${{ secrets.SERVER_IP }}
-        run: | # Usando 'run' e o comando 'ssh' direto
+          SERVER_IP: ${{ secrets.SERVER_IP }} # A variável é definida aqui no ambiente do step
+        run: | # O script abaixo roda no runner local
           echo "DEBUG: Finalizando e removendo containers SonarQube temporarios...";
-          ssh -o StrictHostKeyChecking=no aluno@$SERVER_IP <<EOF
+          # Use ${SERVER_IP} para garantir que a variável seja expandida corretamente
+          ssh -o StrictHostKeyChecking=no aluno@${SERVER_IP} <<EOF
             docker stop sonarqube_temp || true
             docker rm sonarqube_temp || true
           EOF
@@ -131,7 +133,7 @@ jobs:
             
             # Condicional para verificar o status da migração (estrutura Bash em múltiplas linhas do YAML)
             if [ $MIGRATION_STATUS -ne 0 ]; then
-              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
+              echo "ERRO: Migrações do banco de dados falharam! Verifique os logs do workflow para mais detalhes."
               exit $MIGRATION_STATUS
             fi
 
