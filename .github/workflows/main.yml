@@ -61,10 +61,12 @@ jobs:
           args: >-
             -Dsonar.projectKey=fake-shop-app
             -Dsonar.host.url=http://201.23.3.86:9000
-            -Dsonar.sources=.
+            -Dsonar.sources=. \
+            -Dsonar.qualitygate.wait=true \
             -Dsonar.python.version=3.11
             -Dsonar.python.file.suffixes=.py
             -Dsonar.qualitygate.wait=true
+            -Dsonar.login=SEU_TOKEN
 
       - name: Encerrar SonarQube
         if: always()
