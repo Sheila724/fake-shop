@@ -13,3 +13,4 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 8217
 
 ENTRYPOINT ["/app/entrypoint.sh"]
+
