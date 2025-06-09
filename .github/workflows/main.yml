@@ -102,7 +102,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker rm -f fake-shop-app || true
-            docker run -d --name fake-shop-app -p 80:5000 ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
+            docker run -d --name fake-shop-app -p 8217:8217 sheila421/fake-shop-app:latest
 
 
 
