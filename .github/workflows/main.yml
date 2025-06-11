@@ -23,15 +23,31 @@ jobs:
           ssh-keyscan 201.23.3.86 >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Preparar JQ no Servidor Remoto
+        run: |
+          # Este comando SSH vai verificar e baixar o jq no servidor remoto, se necessário.
+          ssh aluno@201.23.3.86 << 'EOF'
+            JQ_BIN_PATH="/home/aluno/jq"
+            if [ ! -f "$JQ_BIN_PATH" ]; then
+              echo "JQ não encontrado, baixando..."
+              # Use a URL correta para a arquitetura do seu servidor remoto (amd64, arm64, etc.)
+              # Para a maioria dos servidores Linux, amd64 é comum.
+              curl -sL https://github.com/stedolan/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o "$JQ_BIN_PATH"
+              chmod +x "$JQ_BIN_PATH"
+              echo "JQ baixado e configurado em $JQ_BIN_PATH"
+            else
+              echo "JQ já existe em $JQ_BIN_PATH"
+            fi
+          EOF
+
       - name: Criar token do admin via API REST
         id: get_sonar_token
         env:
           SONAR_USER: admin
           SONAR_PASS: admin
         run: |
-          # A chamada curl e jq é executada no servidor remoto via SSH.
-          # A porta foi alterada para 8212.
-          SONAR_TOKEN=$(ssh aluno@201.23.3.86 "curl -s -u \"$SONAR_USER:$SONAR_PASS\" -X POST 'http://localhost:8212/api/user_tokens/generate?name=ci-token' | jq -r .token")
+          # Use o caminho completo para jq no servidor remoto.
+          SONAR_TOKEN=$(ssh aluno@201.23.3.86 "curl -s -u \"$SONAR_USER:$SONAR_PASS\" -X POST 'http://localhost:8212/api/user_tokens/generate?name=ci-token' | /home/aluno/jq -r .token")
           echo "::add-mask::$SONAR_TOKEN"
           echo "SONAR_TOKEN=$SONAR_TOKEN" >> $GITHUB_ENV
 
@@ -47,7 +63,6 @@ jobs:
               sonarqube:8.9-community
 
             echo "Aguardando o SonarQube iniciar na porta 8212..."
-            # Aguarda o SonarQube estar "UP" na nova porta.
             until curl -s http://localhost:8212/api/system/health | grep -q '"status":"UP"'; do
               echo "Aguardando SonarQube ficar disponível na porta 8212..."
               sleep 10
@@ -55,17 +70,14 @@ jobs:
 
             cd /home/aluno/sheila_alves/app || exit 1
 
-            # O SONAR_TOKEN é passado como uma variável de ambiente para o docker run do scanner.
-            # Use o valor do token que foi exportado no passo anterior e é acessível aqui via interpolação.
-            # O token do ambiente do GitHub Actions é avaliado antes de enviar o script via SSH.
             docker run --rm \
               -e SONAR_TOKEN="${{ env.SONAR_TOKEN }}" \
               -v "$(pwd)":/usr/src \
               -w /usr/src \
               sonarsource/sonar-scanner-cli:latest
 
-            # Verifica o Quality Gate usando a nova porta.
-            QUALITY_GATE_STATUS=$(curl -s -u "${{ env.SONAR_TOKEN}}:" "http://localhost:8212/api/qualitygates/project_status?projectKey=fake-shop-app" | jq -r '.projectStatus.status')
+            # Use o caminho completo para jq para a verificação do Quality Gate.
+            QUALITY_GATE_STATUS=$(curl -s -u "${{ env.SONAR_TOKEN}}:" "http://localhost:8212/api/qualitygates/project_status?projectKey=fake-shop-app" | /home/aluno/jq -r '.projectStatus.status')
 
             if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
               echo "Falha na análise do SonarQube: QUALITY GATE = $QUALITY_GATE_STATUS"
