@@ -66,7 +66,7 @@ jobs:
               -Dsonar.projectKey=fake-shop-app \
               -Dsonar.projectName="Fake Shop App" \
               -Dsonar.projectVersion=1.0 \
-              -Dsonar.sources=src
+              -Dsonar.sources=src \
               -Dsonar.sourceEncoding=UTF-8 \
               -Dsonar.host.url=http://fake-shop:9000 \
               -Dsonar.login="$TOKEN" \
@@ -130,3 +130,4 @@ jobs:
             docker exec fake-shop-app env > /tmp/app_env_vars.txt
             docker logs fake-shop-app > /tmp/app_logs.txt
             echo "DEBUG: Logs e variáveis de ambiente salvos no servidor."
+
