@@ -1,107 +1,132 @@
-name: Deploy
+name: CI-CD
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
+  CI:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v3
+      - name: Obtendo o Código
+        uses: actions/checkout@v4.2.2
 
-      - name: Build e push da imagem Docker
-        run: |
-          docker build -t fake-shop-app .
-          docker tag fake-shop-app ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker push ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  sonarqube-analysis:
+      - name: Construção e Envio da Imagem Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          push: true
+          file: ./src/Dockerfile
+          tags: |
+            sheila421/fake-shop-app:latest
+            sheila421/fake-shop-app:v${{ github.run_number }}
+
+  sonar-analysis:
+    needs: CI
     runs-on: ubuntu-latest
-    needs: build-and-push
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v3
-
-      - name: Criar rede docker se não existir
-        run: |
-          docker network inspect rede-da-sheila >/dev/null 2>&1 || docker network create rede-da-sheila
-
-      - name: Subir SonarQube
-        run: |
-          docker run -d --rm --name sonarqube-fake-shop \
-            -p 8212:9000 \
-            --network rede-da-sheila \
-            sonarqube:community
-
-      - name: Aguardar inicialização do SonarQube
-        run: |
-          echo "Aguardando inicialização do SonarQube..."
-          for i in {1..30}; do
-            if curl -s http://localhost:8212/api/system/status | grep -q '"status":"UP"'; then
-              echo "SonarQube está pronto."
-              exit 0
+      - name: Executar análise SonarQube no servidor
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker network create rede-da-sheila || true
+            docker run --name fake-shop --network rede-da-sheila -d -p 8212:9000 sonarqube:lts
+            echo "Aguardando inicialização do SonarQube..."
+            for i in {1..30}; do
+              if docker logs fake-shop 2>&1 | grep -q "SonarQube is operational"; then
+                break
+              fi
+              sleep 10
+            done
+            echo "Gerando token temporário do SonarQube..."
+            TOKEN=$(curl -s -u admin:admin -X POST "http://localhost:8212/api/user_tokens/generate" -d "name=github-action-token" | grep -oP '"token":"\K[^"]+')
+            if [ -z "$TOKEN" ]; then
+              echo "Falha ao gerar token do SonarQube"
+              docker stop fake-shop
+              docker rm fake-shop
+              exit 1
             fi
-            sleep 5
-          done
-          echo "SonarQube não iniciou a tempo."
-          docker logs sonarqube-fake-shop
-          exit 1
-
-      - name: Gerar token temporário do SonarQube
-        id: gerar_token
-        run: |
-          echo "Gerando token temporário do SonarQube"
-          resposta=$(curl -s -u admin:admin -X POST "http://localhost:8212/api/user_tokens/generate" -d "name=temp-token")
-          if echo "$resposta" | grep -q "token"; then
-            echo "token=$(echo $resposta | jq -r '.token')" >> $GITHUB_OUTPUT
-          else
-            echo "Falha ao gerar token do SonarQube"
-            exit 1
-          fi
-
-      - name: Instalar dependências do Sonar Scanner
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk unzip wget
-          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-          sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
-
-      - name: Criar arquivo de configuração do Sonar
-        run: |
-          echo "sonar.projectKey=fake-shop-app" > sonar-project.properties
-          echo "sonar.host.url=http://localhost:8212" >> sonar-project.properties
-          echo "sonar.login=${{ steps.gerar_token.outputs.token }}" >> sonar-project.properties
-          echo "sonar.sources=." >> sonar-project.properties
-
-      - name: Rodar análise do SonarQube
-        run: |
-          /opt/sonar-scanner/bin/sonar-scanner
-
-      - name: Parar container do SonarQube
-        if: always()
-        run: docker stop sonarqube-fake-shop
+            echo "Token gerado com sucesso."
+            docker run --rm \
+              --network rede-da-sheila \
+              -v "$(pwd):/usr/src" \
+              -u "0:0" \
+              -e SONAR_USER_HOME=/tmp/.sonar-scanner \
+              sonarsource/sonar-scanner-cli \
+              -Dsonar.projectKey=fake-shop-app \
+              -Dsonar.projectName="Fake Shop App" \
+              -Dsonar.projectVersion=1.0 \
+              -Dsonar.sources=. \
+              -Dsonar.sourceEncoding=UTF-8 \
+              -Dsonar.host.url=http://fake-shop:9000 \
+              -Dsonar.login="$TOKEN" \
+              -Dsonar.qualitygate.wait=true
+            docker stop fake-shop
+            docker rm fake-shop
 
   deploy:
+    needs: sonar-analysis
     runs-on: ubuntu-latest
-    needs: sonarqube-analysis
-    if: ${{ success() }}
     steps:
-      - name: Deploy no servidor via SSH
-        uses: appleboy/ssh-action@v0.1.10
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            docker pull ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
+            mkdir -p /home/aluno/sheila_alves/
+            echo "${{ secrets.SERVER_ENV_FILE }}" > /home/aluno/sheila_alves/.env
+            chmod 600 /home/aluno/sheila_alves/.env
+            docker pull sheila421/fake-shop-app:latest
             docker stop fake-shop-app || true
             docker rm fake-shop-app || true
-            docker run -d --name fake-shop-app \
-              -p 80:5000 \
-              --network rede-da-sheila \
-              ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
+            docker stop fake-shop-db || true
+            docker rm fake-shop-db || true
+            docker network rm rede-da-sheila || true
+            docker network create rede-da-sheila || true
+            docker volume create fake-shop-db-data || true
+            docker run -d --name fake-shop-db --network rede-da-sheila \
+              -e POSTGRES_USER=ecommerce \
+              -e POSTGRES_PASSWORD=Pg1234 \
+              -e POSTGRES_DB=ecommerce \
+              -p 8214:5432 \
+              -v fake-shop-db-data:/var/lib/postgresql/data \
+              postgres:15
+            echo "DEBUG: Aguardando o banco de dados 'fake-shop-db' ficar disponível na porta 5432..."
+            until docker exec fake-shop-db pg_isready -h localhost -p 5432 -U ecommerce; do
+              echo "DEBUG: Banco de dados não está pronto ainda. Tentando novamente em 5 segundos..."
+              sleep 5
+            done
+            echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
+            sleep 20
+            DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
+            echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
+            docker run --rm --network rede-da-sheila \
+              --env-file /home/aluno/sheila_alves/.env \
+              -e FLASK_APP=index.py \
+              -e DB_HOST="$DB_INTERNAL_IP" \
+              sheila421/fake-shop-app:latest migrate
+            MIGRATION_STATUS=$?
+            if [ $MIGRATION_STATUS -ne 0 ]; then
+              echo "ERRO: Migrações do banco de dados falharam!"
+              exit $MIGRATION_STATUS
+            fi
+            docker run -d --name fake-shop-app --network rede-da-sheila \
+              --env-file /home/aluno/sheila_alves/.env \
+              -e DB_HOST="$DB_INTERNAL_IP" \
+              -p 8217:8217 sheila421/fake-shop-app:latest run
+            sleep 5
+            docker exec fake-shop-app env > /tmp/app_env_vars.txt
+            docker logs fake-shop-app > /tmp/app_logs.txt
+            echo "DEBUG: Logs e variáveis de ambiente salvos no servidor."
