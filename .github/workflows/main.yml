@@ -29,6 +29,8 @@ jobs:
             JQ_BIN_PATH="/home/aluno/jq"
             if [ ! -f "$JQ_BIN_PATH" ]; then
               echo "JQ não encontrado, baixando..."
+              # Use a URL correta para a arquitetura do seu servidor remoto (amd64, arm64, etc.)
+              # Para a maioria dos servidores Linux, amd64 é comum.
               curl -sL https://github.com/stedolan/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o "$JQ_BIN_PATH"
               chmod +x "$JQ_BIN_PATH"
               echo "JQ baixado e configurado em $JQ_BIN_PATH"
@@ -57,12 +59,11 @@ jobs:
             docker stop sonarqube-ci || true
             docker rm sonarqube-ci || true
 
-            echo "Iniciando SonarQube Docker..."
+            echo "Iniciando SonarQube Docker sem volumes persistentes..."
+            # As linhas -v sonarqube_data e -v sonarqube_logs foram removidas aqui.
             docker run -d --name sonarqube-ci \
               -p 8212:9000 \
               -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-              -v sonarqube_data:/opt/sonarqube/data \
-              -v sonarqube_logs:/opt/sonarqube/logs \
               sonarqube:8.9-community
 
             echo "Aguardando o SonarQube iniciar na porta 8212..."
