@@ -1,12 +1,10 @@
-name: CI/CD com SonarQube
+name: Deploy
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
 
 jobs:
-  CI:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
@@ -19,73 +17,89 @@ jobs:
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
           docker push ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
 
-  sonar-analysis:
-    needs: CI
+  sonarqube-analysis:
     runs-on: ubuntu-latest
+    needs: build-and-push
     steps:
-      - name: Executar análise SonarQube no servidor
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            docker network create rede-da-sheila || true
+      - name: Checkout do código
+        uses: actions/checkout@v3
 
-            docker run --name sonarqube-fake-shop --network rede-da-sheila -d -p 8212:9000 sonarqube:lts
+      - name: Criar rede docker se não existir
+        run: |
+          docker network inspect rede-da-sheila >/dev/null 2>&1 || docker network create rede-da-sheila
 
-            echo "Aguardando inicialização do SonarQube..."
-            for i in {1..30}; do
-              if docker logs sonarqube-fake-shop 2>&1 | grep -q "SonarQube is operational"; then
-                echo "SonarQube está pronto!"
-                break
-              fi
-              echo "Aguardando... ($i/30)"
-              sleep 10
-            done
+      - name: Subir SonarQube
+        run: |
+          docker run -d --rm --name sonarqube-fake-shop \
+            -p 8212:9000 \
+            --network rede-da-sheila \
+            sonarqube:community
 
-            echo "Gerando token temporário do SonarQube..."
-            TOKEN=$(curl -s -u admin:admin -X POST "http://localhost:8212/api/user_tokens/generate" -d "name=github-action-token" | grep -oP '"token":"\K[^"]+')
-
-            if [ -z "$TOKEN" ]; then
-              echo "Falha ao gerar token do SonarQube"
-              docker stop sonarqube-fake-shop
-              docker rm sonarqube-fake-shop
-              exit 1
+      - name: Aguardar inicialização do SonarQube
+        run: |
+          echo "Aguardando inicialização do SonarQube..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8212/api/system/status | grep -q '"status":"UP"'; then
+              echo "SonarQube está pronto."
+              exit 0
             fi
+            sleep 5
+          done
+          echo "SonarQube não iniciou a tempo."
+          docker logs sonarqube-fake-shop
+          exit 1
 
-            echo "Token gerado com sucesso."
+      - name: Gerar token temporário do SonarQube
+        id: gerar_token
+        run: |
+          echo "Gerando token temporário do SonarQube"
+          resposta=$(curl -s -u admin:admin -X POST "http://localhost:8212/api/user_tokens/generate" -d "name=temp-token")
+          if echo "$resposta" | grep -q "token"; then
+            echo "token=$(echo $resposta | jq -r '.token')" >> $GITHUB_OUTPUT
+          else
+            echo "Falha ao gerar token do SonarQube"
+            exit 1
+          fi
 
-            docker run --rm \
-              --network rede-da-sheila \
-              -v "$(pwd):/usr/src" \
-              -u "0:0" \
-              -e SONAR_USER_HOME=/tmp/.sonar-scanner \
-              sonarsource/sonar-scanner-cli \
-              -Dsonar.projectKey=fake-shop-app \
-              -Dsonar.projectName="Fake Shop App" \
-              -Dsonar.projectVersion=1.0 \
-              -Dsonar.sources=. \
-              -Dsonar.sourceEncoding=UTF-8 \
-              -Dsonar.host.url=http://sonarqube-fake-shop:9000 \
-              -Dsonar.login="$TOKEN" \
-              -Dsonar.qualitygate.wait=true
+      - name: Instalar dependências do Sonar Scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk unzip wget
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+          sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
 
-            docker stop sonarqube-fake-shop
-            docker rm sonarqube-fake-shop
+      - name: Criar arquivo de configuração do Sonar
+        run: |
+          echo "sonar.projectKey=fake-shop-app" > sonar-project.properties
+          echo "sonar.host.url=http://localhost:8212" >> sonar-project.properties
+          echo "sonar.login=${{ steps.gerar_token.outputs.token }}" >> sonar-project.properties
+          echo "sonar.sources=." >> sonar-project.properties
+
+      - name: Rodar análise do SonarQube
+        run: |
+          /opt/sonar-scanner/bin/sonar-scanner
+
+      - name: Parar container do SonarQube
+        if: always()
+        run: docker stop sonarqube-fake-shop
 
   deploy:
-    needs: sonar-analysis
     runs-on: ubuntu-latest
+    needs: sonarqube-analysis
+    if: ${{ success() }}
     steps:
-      - name: Deploy da aplicação no servidor
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy no servidor via SSH
+        uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
             docker pull ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
-            docker stop fake-shop-container || true
-            docker rm fake-shop-container || true
-            docker run -d --name fake-shop-container --network rede-da-sheila -p 80:3000 ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
+            docker stop fake-shop-app || true
+            docker rm fake-shop-app || true
+            docker run -d --name fake-shop-app \
+              -p 80:5000 \
+              --network rede-da-sheila \
+              ${{ secrets.DOCKER_USERNAME }}/fake-shop-app:latest
