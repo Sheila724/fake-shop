@@ -30,12 +30,11 @@ jobs:
             if [ ! -f "$JQ_BIN_PATH" ]; then
               echo "JQ não encontrado, baixando..."
               # Use a URL correta para a arquitetura do seu servidor remoto (amd64, arm64, etc.)
-              # Para a maioria dos servidores Linux, amd64 é comum.
               curl -sL https://github.com/stedolan/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o "$JQ_BIN_PATH"
               chmod +x "$JQ_BIN_PATH"
               echo "JQ baixado e configurado em $JQ_BIN_PATH"
             else
-              echo "JQ já existe em $JQ_BIN_PATH"
+              echo "JQ já existe em "$JQ_BIN_PATH""
             fi
           EOF
 
@@ -45,7 +44,8 @@ jobs:
           SONAR_USER: admin
           SONAR_PASS: admin
         run: |
-          # Use o caminho completo para jq no servidor remoto.
+          # A chamada curl e jq é executada no servidor remoto via SSH.
+          # Use o caminho completo para jq.
           SONAR_TOKEN=$(ssh aluno@201.23.3.86 "curl -s -u \"$SONAR_USER:$SONAR_PASS\" -X POST 'http://localhost:8212/api/user_tokens/generate?name=ci-token' | /home/aluno/jq -r .token")
           echo "::add-mask::$SONAR_TOKEN"
           echo "SONAR_TOKEN=$SONAR_TOKEN" >> $GITHUB_ENV
@@ -53,17 +53,19 @@ jobs:
       - name: Análise com SonarQube via SSH remoto
         run: |
           # Passe SONAR_TOKEN como uma variável de ambiente para o comando SSH remoto.
-          # Isso permite que ele seja expandido corretamente no lado remoto.
           ssh -o StrictHostKeyChecking=no aluno@201.23.3.86 SONAR_TOKEN="${{ env.SONAR_TOKEN }}" 'bash -s' << 'EOF'
             # Garanta que o contêiner SonarQube seja parado e removido antes de tentar iniciar
             docker stop sonarqube-ci || true
             docker rm sonarqube-ci || true
 
-            echo "Iniciando SonarQube Docker sem volumes persistentes..."
-            # As linhas -v sonarqube_data e -v sonarqube_logs foram removidas aqui.
+            echo "Iniciando SonarQube Docker (sem volumes persistentes e com otimização de RAM)..."
+            # As linhas -v sonarqube_data e -v sonarqube_logs foram removidas.
+            # Adicionado ajuste de RAM para o Elasticsearch e SonarQube (último recurso para ambientes com pouca memória).
             docker run -d --name sonarqube-ci \
               -p 8212:9000 \
               -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+              -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+              -e "sonar.web.javaOpts=-Xmx256m" \
               sonarqube:8.9-community
 
             echo "Aguardando o SonarQube iniciar na porta 8212..."
