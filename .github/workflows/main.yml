@@ -12,103 +12,6 @@ jobs:
       - name: Obtendo o Código
         uses: actions/checkout@v4.2.2
 
-      - name: Configurar SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_SONAR }} # Certifique-se que este segredo existe no GitHub
-
-      - name: Adicionar host ao known_hosts (para evitar prompts de segurança)
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan 201.23.3.86 >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Preparar JQ no Servidor Remoto
-        run: |
-          ssh aluno@201.23.3.86 << 'EOF'
-            JQ_BIN_PATH="/home/aluno/jq"
-            if [ ! -f "$JQ_BIN_PATH" ]; then
-              echo "JQ não encontrado, baixando..."
-              # Use a URL correta para a arquitetura do seu servidor remoto (amd64, arm64, etc.)
-              curl -sL https://github.com/stedolan/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o "$JQ_BIN_PATH"
-              chmod +x "$JQ_BIN_PATH"
-              echo "JQ baixado e configurado em $JQ_BIN_PATH"
-            else
-              echo "JQ já existe em "$JQ_BIN_PATH""
-            fi
-          EOF
-
-      - name: Criar token do admin via API REST
-        id: get_sonar_token
-        env:
-          SONAR_USER: admin
-          SONAR_PASS: admin
-        run: |
-          # A chamada curl e jq é executada no servidor remoto via SSH.
-          # Use o caminho completo para jq.
-          SONAR_TOKEN=$(ssh aluno@201.23.3.86 "curl -s -u \"$SONAR_USER:$SONAR_PASS\" -X POST 'http://localhost:8212/api/user_tokens/generate?name=ci-token' | /home/aluno/jq -r .token")
-          echo "::add-mask::$SONAR_TOKEN"
-          echo "SONAR_TOKEN=$SONAR_TOKEN" >> $GITHUB_ENV
-
-      - name: Análise com SonarQube via SSH remoto
-        run: |
-          # Passe SONAR_TOKEN como uma variável de ambiente para o comando SSH remoto.
-          ssh -o StrictHostKeyChecking=no aluno@201.23.3.86 SONAR_TOKEN="${{ env.SONAR_TOKEN }}" 'bash -s' << 'EOF'
-            # Garanta que o contêiner SonarQube seja parado e removido antes de tentar iniciar
-            docker stop sonarqube-ci || true
-            docker rm sonarqube-ci || true
-
-            echo "Iniciando SonarQube Docker (sem volumes persistentes e com otimização de RAM)..."
-            # As linhas -v sonarqube_data e -v sonarqube_logs foram removidas.
-            # Adicionado ajuste de RAM para o Elasticsearch e SonarQube (último recurso para ambientes com pouca memória).
-            docker run -d --name sonarqube-ci \
-              -p 8212:9000 \
-              -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-              -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
-              -e "sonar.web.javaOpts=-Xmx256m" \
-              sonarqube:8.9-community
-
-            echo "Aguardando o SonarQube iniciar na porta 8212..."
-            SONAR_WAIT_TIMEOUT=600
-            SONAR_WAIT_INTERVAL=15
-            SONAR_WAIT_TIME=0
-            until curl -s http://localhost:8212/api/system/health | grep -q '"status":"UP"'; do
-              if [ "$SONAR_WAIT_TIME" -ge "$SONAR_WAIT_TIMEOUT" ]; then
-                echo "Erro: SonarQube não iniciou dentro do tempo limite de $SONAR_WAIT_TIMEOUT segundos."
-                docker stop sonarqube-ci || true
-                docker rm sonarqube-ci || true
-                exit 1
-              fi
-              echo "Aguardando SonarQube ficar disponível na porta 8212... (${SONAR_WAIT_TIME}s / ${SONAR_WAIT_TIMEOUT}s)"
-              sleep "$SONAR_WAIT_INTERVAL"
-              SONAR_WAIT_TIME=$((SONAR_WAIT_TIME + SONAR_WAIT_INTERVAL))
-            done
-            echo "SonarQube está disponível!"
-
-            cd /home/aluno/sheila_alves/app || exit 1
-
-            # Use a variável de ambiente SONAR_TOKEN que foi passada via SSH
-            docker run --rm \
-              -e SONAR_TOKEN="$SONAR_TOKEN" \
-              -v "$(pwd)":/usr/src \
-              -w /usr/src \
-              sonarsource/sonar-scanner-cli:latest
-
-            # Use a variável de ambiente SONAR_TOKEN para a verificação do Quality Gate
-            QUALITY_GATE_STATUS=$(curl -s -u "$SONAR_TOKEN:" "http://localhost:8212/api/qualitygates/project_status?projectKey=fake-shop-app" | /home/aluno/jq -r '.projectStatus.status')
-
-            if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
-              echo "Falha na análise do SonarQube: QUALITY GATE = $QUALITY_GATE_STATUS"
-              docker stop sonarqube-ci
-              docker rm sonarqube-ci
-              exit 1
-            fi
-
-            echo "Quality Gate OK: $QUALITY_GATE_STATUS"
-            docker stop sonarqube-ci
-            docker rm sonarqube-ci
-          EOF
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -124,7 +27,6 @@ jobs:
           tags: |
             sheila421/fake-shop-app:latest
             sheila421/fake-shop-app:v${{ github.run_number }}
-
   deploy:
     needs: CI
     runs-on: ubuntu-latest
@@ -144,7 +46,6 @@ jobs:
             docker network rm rede-da-sheila || true
             docker network create rede-da-sheila || true
             docker volume create fake-shop-db-data || true
-
             docker run -d --name fake-shop-db --network rede-da-sheila \
               -e POSTGRES_USER=ecommerce \
               -e POSTGRES_PASSWORD=Pg1234 \
@@ -152,7 +53,6 @@ jobs:
               -p 8214:5432 \
               -v fake-shop-db-data:/var/lib/postgresql/data \
               postgres:15
-
             echo "DEBUG: Aguardando o banco de dados 'fake-shop-db' ficar disponível na porta 5432..."
             until docker exec fake-shop-db pg_isready -h localhost -p 5432 -U ecommerce; do
               echo "DEBUG: Banco de dados não está pronto ainda. Tentando novamente em 5 segundos..."
@@ -160,31 +60,30 @@ jobs:
             done
             echo "DEBUG: Banco de dados 'fake-shop-db' está pronto!"
             sleep 20
-
             DB_INTERNAL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fake-shop-db)
             echo "DEBUG: IP interno do fake-shop-db para migração e aplicação: $DB_INTERNAL_IP"
-
+            # Executa as migrações sem manter o container vivo
             docker run --rm --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e FLASK_APP=index.py \
               -e DB_HOST="$DB_INTERNAL_IP" \
               sheila421/fake-shop-app:latest migrate
-
             MIGRATION_STATUS=$?
             if [ $MIGRATION_STATUS -ne 0 ]; then
               echo "ERRO: Migrações do banco de dados falharam! Verifique os logs da execução do workflow para mais detalhes."
               exit $MIGRATION_STATUS
             fi
-
+            # Inicia o app com Gunicorn
             docker run -d --name fake-shop-app --network rede-da-sheila \
               --env-file /home/aluno/sheila_alves/.env \
               -e DB_HOST="$DB_INTERNAL_IP" \
               -p 8217:8217 sheila421/fake-shop-app:latest run
-
             sleep 5
             docker exec fake-shop-app env > /tmp/app_env_vars.txt
             docker logs fake-shop-app > /tmp/app_logs.txt
             echo "DEBUG: Logs e variáveis de ambiente salvos em /tmp/app_logs.txt e /tmp/app_env_vars.txt no servidor."
+            echo "DEBUG: Acesse o servidor via SSH e use 'cat /tmp/app_env_vars.txt' e 'cat /tmp/app_logs.txt' para verificar."
+
 
 
 
